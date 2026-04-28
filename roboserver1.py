@@ -17,6 +17,10 @@
 import socket
 import threading
 
+# keep track of registered client IDs and their connections
+connected_clients = {}  # maps client_name -> connection socket
+connected_clients_lock = threading.Lock()
+
 # define the IP address of the machine on which the server is running.
 # this could be a dotted quad address or 'localhost' (shorthand for the local machine).
 HOST = 'localhost'   # or, e.g. '10.5.24.62'
@@ -63,6 +67,7 @@ class client_thread( threading.Thread ):
 
     # this function is called when the thread object starts
     def run( self ):
+        registered_name = None
         self.setState( STATE_CLIENT_RUNNING )
         print( '[server client %s]: running' % ( self.name ))
         while True:
@@ -76,11 +81,46 @@ class client_thread( threading.Thread ):
             else:
                 client_msg_tokens = client_msg.decode().split()
                 if ( client_msg_tokens[0] == MSG_REGISTER ):
-                    self.name = client_msg_tokens[1]
-                elif ( client_msg_tokens[0] == MSG_PING ):
-                    server_msg = MSG_PONG
+                    # parse REGISTER <FROM>
+                    if ( len( client_msg_tokens ) >= 2 ):
+                        self.name = client_msg_tokens[1]
+
+                    if ( self.name and registered_name != self.name ):
+                        with connected_clients_lock:
+                            if ( registered_name and registered_name in connected_clients ):
+                                del connected_clients[ registered_name ]
+                            connected_clients[ self.name ] = self.connection
+                            registered_name = self.name
+                            client_list_payload = ' '.join( connected_clients.keys() )
+                            print( '[server main] connected client IDs: %s' % ( list( connected_clients.keys() ) ))
+
+                    # send back PONG SERVER <LIST>
+                    with connected_clients_lock:
+                        client_list_payload = ' '.join( connected_clients.keys() )
+                    server_msg = 'PONG SERVER ' + client_list_payload
                     print( '[server client %s]: sending message [%s]' % ( self.name, server_msg ))
-                    self.connection.sendall( server_msg.encode() ) # send message to client
+                    self.connection.sendall( server_msg.encode() ) # send list to client after register
+                elif ( len( client_msg_tokens ) >= 3 and client_msg_tokens[0] in [MSG_PING, MSG_PONG] ):
+                    # parse <MSG> <FROM> <TO> and forward
+                    msg_type = client_msg_tokens[0]
+                    msg_from = client_msg_tokens[1]
+                    msg_to = client_msg_tokens[2]
+                    
+                    with connected_clients_lock:
+                        if ( msg_to in connected_clients ):
+                            target_connection = connected_clients[ msg_to ]
+                            print( '[server client %s]: forwarding %s from %s to %s' % ( self.name, msg_type, msg_from, msg_to ))
+                            # forward message to target client
+                            target_connection.sendall( client_msg )
+                        else:
+                            print( '[server client %s]: target client %s not found' % ( self.name, msg_to ))
+                else:
+                    print( '[server client %s]: unknown message format' % ( self.name ))
+        if ( registered_name ):
+            with connected_clients_lock:
+                if ( registered_name in connected_clients ):
+                    del connected_clients[ registered_name ]
+                print( '[server main] connected client IDs: %s' % ( list( connected_clients.keys() ) ))
         self.setState( STATE_CLIENT_EXITING )
         print( '[server client %s]: exiting' % ( self.name ))
 

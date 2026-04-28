@@ -51,30 +51,83 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
     # bind the newly created socket object to the server's host and port (defined by the server).
     cs.connect(( HOST, PORT ))
     print( '[client %s] socket connected to host [%s], port [%s]' % ( client_id, HOST, PORT ))
-    #state = STATE_CLIENT_RUNNING
+    
+    # send REGISTER <NAME>
     client_msg = MSG_REGISTER + ' ' + client_id
     print( '[client %s] sending message: %s' % ( client_id, client_msg ))
-    cs.sendall( client_msg.encode() ) # send formatted message to server
+    cs.sendall( client_msg.encode() )
     print( '[client %s] sent message: %s' % ( client_id, client_msg ))
-    state = STATE_CLIENT_RUNNING
+
+    # receive PONG SERVER <LIST>
+    server_msg = cs.recv( 1024 )
+    server_msg_text = server_msg.decode()
+    print( '[client %s] received message: %s' % ( client_id, server_msg_text ))
+    server_msg_tokens = server_msg_text.split()
+    
+    connected_clients_list = []
+    target_client = None
+    
+    if ( len( server_msg_tokens ) >= 3 and server_msg_tokens[0] == MSG_PONG and server_msg_tokens[1] == 'SERVER' ):
+        connected_clients_list = server_msg_tokens[2:]
+        print( '[client %s] connected clients: %s' % ( client_id, connected_clients_list ))
+        # find a target client different from self
+        for c in connected_clients_list:
+            if ( c != client_id ):
+                target_client = c
+                break
+        state = STATE_CLIENT_RUNNING
+    else:
+        state = STATE_CLIENT_ERROR
+        print( '[client %s] unexpected register response from server: %s' % ( client_id, server_msg_text ))
+
     while( True ):
         if ( state == STATE_CLIENT_RUNNING ):
             print( '[client %s] running' % ( client_id ))
             time.sleep( 5 )
-            state = STATE_CLIENT_SEND_PING
-        elif ( state == STATE_CLIENT_SEND_PING ): # check if server is alive
-            client_msg = MSG_PING
-            cs.sendall( client_msg.encode() ) # send formatted message to server
+            if ( target_client ):
+                state = STATE_CLIENT_SEND_PING
+            else:
+                state = STATE_CLIENT_EXITING
+        elif ( state == STATE_CLIENT_SEND_PING ): # send PING <FROM> <TO>
+            client_msg = MSG_PING + ' ' + client_id + ' ' + target_client
+            cs.sendall( client_msg.encode() )
             print( '[client %s] sent message: %s' % ( client_id, client_msg ))
             state = STATE_CLIENT_RECEIVE_PONG
-        elif ( state == STATE_CLIENT_RECEIVE_PONG ): # wait for message from server
+        elif ( state == STATE_CLIENT_RECEIVE_PONG ): # wait for message from other client
             server_msg = cs.recv( 1024 )
-            print( '[client %s] received message: %s' % ( client_id, server_msg.decode() ))
-            if ( server_msg.decode() == MSG_PONG ): # server is alive
-                state = STATE_CLIENT_RUNNING
+            server_msg_text = server_msg.decode()
+            print( '[client %s] received message: %s' % ( client_id, server_msg_text ))
+            server_msg_tokens = server_msg_text.split()
+            
+            if ( len( server_msg_tokens ) >= 3 ):
+                msg_type = server_msg_tokens[0]
+                msg_from = server_msg_tokens[1]
+                msg_to = server_msg_tokens[2]
+                
+                if ( msg_type == MSG_PONG and msg_to == client_id ):
+                    # received PONG from another client
+                    print( '[client %s] received PONG from %s' % ( client_id, msg_from ))
+                    # sleep and then send PING back
+                    time.sleep( 5 )
+                    response_msg = MSG_PING + ' ' + client_id + ' ' + msg_from
+                    cs.sendall( response_msg.encode() )
+                    print( '[client %s] sent message: %s' % ( client_id, response_msg ))
+                    state = STATE_CLIENT_RECEIVE_PONG
+                elif ( msg_type == MSG_PING and msg_to == client_id ):
+                    # received PING from another client
+                    print( '[client %s] received PING from %s' % ( client_id, msg_from ))
+                    # sleep and then send PONG back
+                    time.sleep( 5 )
+                    response_msg = MSG_PONG + ' ' + client_id + ' ' + msg_from
+                    cs.sendall( response_msg.encode() )
+                    print( '[client %s] sent message: %s' % ( client_id, response_msg ))
+                    state = STATE_CLIENT_RECEIVE_PONG
+                else:
+                    state = STATE_CLIENT_ERROR
+                    print( '[client %s] unexpected message: %s' % ( client_id, server_msg_text ))
             else:
                 state = STATE_CLIENT_ERROR
-                print( '[client %s] unexpected message received from server: %s' % ( client_id, server_msg.decode() ))
+                print( '[client %s] unexpected message format: %s' % ( client_id, server_msg_text ))
         elif ( state == STATE_CLIENT_ERROR ):
             state = STATE_CLIENT_EXITING
             print( '[client %s] exiting in error state' % ( client_id ))
