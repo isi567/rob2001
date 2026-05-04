@@ -51,7 +51,8 @@ target_id = sys.argv[2]
 with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
     state = STATE_CLIENT_STARTING
     has_sent_colour = False
-    registration_time = time.time()
+    last_send_time = 0.0
+    send_interval = 5.0
     print( '[client %s] socket created' % ( client_id ))
     # bind the newly created socket object to the server's host and port (defined by the server).
     cs.connect(( HOST, PORT ))
@@ -66,7 +67,7 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
     while( True ):
         if ( state == STATE_CLIENT_RUNNING ):
             now = time.time()
-            if ( client_id == 'a' and not has_sent_colour and now - registration_time >= 5.0 ):
+            if ( client_id != target_id and not has_sent_colour and now - last_send_time >= send_interval ):
                 state = STATE_CLIENT_SEND_COLOUR
             else:
                 state = STATE_CLIENT_RECEIVE_COLOUR
@@ -76,7 +77,7 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
             client_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id
             cs.sendall( (client_msg + '\n').encode() ) # send formatted message to server
             print( '[client %s] sent message: %s' % ( client_id, client_msg ))
-            has_sent_colour = True
+            last_send_time = time.time()
             state = STATE_CLIENT_RUNNING
 
 
@@ -106,14 +107,15 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
             print( '[client %s] received message: %s' % ( client_id, decoded_msg ))
             msg_tokens = decoded_msg.split()
 
-            if ( decoded_msg.startswith( 'Forwarded ' + MSG_COLOUR + ' from ' ) and client_id == 'b' and len( msg_tokens ) >= 4 ):
+            if ( decoded_msg.startswith( 'Forwarded ' + MSG_COLOUR + ' from ' ) and len( msg_tokens ) >= 4 ):
                 sender_id = msg_tokens[3]
                 reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + sender_id
                 cs.sendall( (reply_msg + '\n').encode() )
                 print( '[client %s] sent message: %s' % ( client_id, reply_msg ))
-            elif ( decoded_msg.startswith( 'Forwarded ' + MSG_RECEIVED + ' from ' ) and client_id == 'a' and len( msg_tokens ) >= 4 ):
+            elif ( decoded_msg.startswith( 'Forwarded ' + MSG_RECEIVED + ' from ' ) and len( msg_tokens ) >= 4 ):
                 sender_id = msg_tokens[3]
                 print( '[client %s] got received confirmation from %s' % ( client_id, sender_id ))
+                has_sent_colour = True
 
             state = STATE_CLIENT_RUNNING
             
