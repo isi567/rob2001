@@ -27,7 +27,7 @@ PORT = 50007
 
 # define messages
 MSG_REGISTER = 'REGISTER'
-MSG_COLOUR = 'GREEN'
+MSG_SENT = 'MESSAGE'
 MSG_RECEIVED = 'RECEIVED'
 
 # define server state variables
@@ -40,8 +40,8 @@ STATE_CLIENT_STARTING     = 0
 STATE_CLIENT_EXITING      = 1
 STATE_CLIENT_RUNNING      = 2
 STATE_CLIENT_ERROR        = 3
-STATE_CLIENT_RECEIVE_COLOUR = 4
-STATE_CLIENT_SEND_COLOUR    = 5
+STATE_CLIENT_RECEIVE_SENT = 4
+STATE_CLIENT_SEND_SENT    = 5
 
 ClientList = []
 ClientListLock = threading.Lock()
@@ -90,7 +90,7 @@ class client_thread( threading.Thread ):
                 client_msg_tokens = decoded_msg.split()
                 if ( client_msg_tokens[0] == MSG_REGISTER ):
                     self.name = client_msg_tokens[1]
-                elif ( client_msg_tokens[0] == MSG_COLOUR or client_msg_tokens[0] == MSG_RECEIVED ):
+                elif ( client_msg_tokens[0] == MSG_SENT or client_msg_tokens[0] == MSG_RECEIVED ):
                     msg_type = client_msg_tokens[0]
                     msg_payload = ' '.join( client_msg_tokens[3:] )
                     server_msg = 'Server has received ' + msg_type + ' from ' + self.name
