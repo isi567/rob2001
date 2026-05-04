@@ -22,7 +22,6 @@ import time
 import numpy as np
 import socket
 import sys
-import threading
 # import trilobot package 
 from trilobot import Trilobot
 from picamera2 import Picamera2
@@ -34,11 +33,20 @@ import find
 # network protocol constants (must match roboserver1.py)
 MSG_REGISTER = 'REGISTER'
 MSG_COLOUR = 'COLOUR'
+MSG_RECEIVED = 'RECEIVED'
 MSG_LIST = 'LIST'
 MSG_ERROR = 'ERROR'
 
 HOST = 'localhost'
 PORT = 50007
+
+# define client thread state variables
+STATE_CLIENT_STARTING     = 0
+STATE_CLIENT_EXITING      = 1
+STATE_CLIENT_RUNNING      = 2
+STATE_CLIENT_ERROR        = 3
+STATE_CLIENT_SEND_COLOUR    = 4
+STATE_CLIENT_RECEIVE_COLOUR = 5
 
 # set parameters for controlling how far the trilobot moves
 DRIVE_SPEED = 1.0
@@ -140,35 +148,6 @@ def get_distance():
     print( 'distance from nearest object = %fcm' % ( distance ))
     return( distance )
 
-def receive_network_messages( connection, client_id ):
-    while True:
-        try:
-            server_msg = connection.recv( 1024 )
-        except Exception as e:
-            print( '[vision %s] receive error: %s' % ( client_id, e ))
-            break
-
-        if ( not server_msg ):
-            print( '[vision %s] server disconnected' % ( client_id ))
-            break
-
-        server_msg_text = server_msg.decode().strip()
-        if ( not server_msg_text ):
-            continue
-
-        print( '[vision %s] received: %s' % ( client_id, server_msg_text ))
-        tokens = server_msg_text.split()
-        if ( len( tokens ) >= 4 and tokens[0] == MSG_COLOUR ):
-            msg_from = tokens[1]
-            msg_to = tokens[2]
-            msg_colour = ' '.join( tokens[3:] ).lower()
-            if ( msg_to == client_id ):
-                print( '[vision %s] peer %s colour: %s' % ( client_id, msg_from, msg_colour ))
-                apply_colour_lights( msg_colour )
-        elif ( len( tokens ) >= 3 and tokens[0] == MSG_ERROR ):
-            print( '[vision %s] server error: %s' % ( client_id, ' '.join( tokens[2:] ) ))
-
-
 #-----
 # main
 #-----
@@ -198,18 +177,18 @@ picam2.start()
 # connect to server and register this Trilobot client
 cs = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
 cs.connect(( server_host, server_port ))
+cs.settimeout( 0.5 )
 register_msg = MSG_REGISTER + ' ' + client_id
-cs.sendall( register_msg.encode() )
+cs.sendall( ( register_msg + '\n' ).encode() )
 register_reply = cs.recv( 1024 ).decode().strip()
 print( '[vision %s] register reply: %s' % ( client_id, register_reply ))
 
-# start background listener for incoming colour messages
-receiver = threading.Thread( target=receive_network_messages, args=( cs, client_id ), daemon=True )
-receiver.start()
-
+state = STATE_CLIENT_RUNNING
 last_sent_colour = None
 last_send_time = 0.0
 min_send_interval = 0.8
+recv_buffer = ''
+has_received_confirmation = False
 
 while True:
     img = picam2.capture_array()
@@ -287,3 +266,68 @@ while True:
     # Otherwise, look for it
     else:
         sharp_right()
+
+    now = time.time()
+    if ( state == STATE_CLIENT_RUNNING ):
+        if ( detected_colour and target_client and ( detected_colour != last_sent_colour or now - last_send_time >= min_send_interval ) and not has_received_confirmation ):
+            state = STATE_CLIENT_SEND_COLOUR
+        else:
+            state = STATE_CLIENT_RECEIVE_COLOUR
+
+    elif ( state == STATE_CLIENT_SEND_COLOUR ):
+        out_msg = MSG_COLOUR + ' ' + client_id + ' ' + target_client + ' ' + detected_colour
+        try:
+            cs.sendall( ( out_msg + '\n' ).encode() )
+            print( '[vision %s] sent: %s' % ( client_id, out_msg ))
+            last_sent_colour = detected_colour
+            last_send_time = now
+        except Exception as e:
+            print( '[vision %s] send error: %s' % ( client_id, e ))
+            break
+        state = STATE_CLIENT_RUNNING
+
+    elif ( state == STATE_CLIENT_RECEIVE_COLOUR ):
+        try:
+            chunk = cs.recv( 1024 )
+        except socket.timeout:
+            state = STATE_CLIENT_RUNNING
+            continue
+        except OSError:
+            state = STATE_CLIENT_EXITING
+            continue
+
+        if ( not chunk ):
+            print( '[vision %s] server disconnected' % ( client_id ))
+            state = STATE_CLIENT_EXITING
+            continue
+
+        recv_buffer += chunk.decode()
+        lines = recv_buffer.split( '\n' )
+        recv_buffer = lines[-1]
+
+        for line in lines[:-1]:
+            server_msg_text = line.strip()
+            if ( not server_msg_text ):
+                continue
+
+            print( '[vision %s] received: %s' % ( client_id, server_msg_text ))
+            tokens = server_msg_text.split()
+
+            if ( len( tokens ) >= 4 and tokens[0] == MSG_COLOUR ):
+                msg_from = tokens[1]
+                msg_to = tokens[2]
+                msg_colour = ' '.join( tokens[3:] ).lower()
+                if ( msg_to == client_id ):
+                    print( '[vision %s] peer %s colour: %s' % ( client_id, msg_from, msg_colour ))
+                    apply_colour_lights( msg_colour )
+                    reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
+                    cs.sendall( ( reply_msg + '\n' ).encode() )
+                    print( '[vision %s] sent: %s' % ( client_id, reply_msg ))
+            elif ( len( tokens ) >= 4 and tokens[0] == MSG_RECEIVED ):
+                msg_from = tokens[1]
+                msg_to = tokens[2]
+                if ( msg_to == client_id ):
+                    print( '[vision %s] got received confirmation from %s' % ( client_id, msg_from ))
+                    has_received_confirmation = True
+
+        state = STATE_CLIENT_RUNNING

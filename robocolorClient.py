@@ -15,6 +15,8 @@
 import socket
 import sys
 import time
+import threading
+import queue
 
 
 # define the IP address of the machine on which the server is running--where you want this client to connect.
@@ -40,19 +42,38 @@ STATE_CLIENT_RECEIVE_COLOUR = 5
 
 # client ID and target ID are command line arguments
 if ( len( sys.argv ) < 3 ):
-    print( 'usage: python robocolorClient.py <ID> <TARGET_ID>' )
+    print( 'usage: python robocolorClient.py <ID> <TARGET_ID> [MESSAGE ...]' )
     sys.exit( 1 )
 
 client_id = sys.argv[1]
 target_id = sys.argv[2]
+# initial message_text may be provided on the command line, but by default
+# we'll accept interactive typing after the client has started.
+initial_message = ' '.join( sys.argv[3:] ).strip()
+message_text = ''
+input_queue = queue.Queue()
+
+def stdin_reader(q):
+    # Blocking read from stdin (one line at a time). Runs in a daemon thread.
+    while True:
+        try:
+            line = sys.stdin.readline()
+        except Exception:
+            break
+        if not line:
+            break
+        line = line.strip()
+        if line:
+            q.put(line)
 
 
 # try to create and open a new socket object (called "cs", for client socket).
 with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
     state = STATE_CLIENT_STARTING
     has_sent_colour = False
+    has_received_confirmation = False
     last_send_time = 0.0
-    send_interval = 5.0
+    send_interval = 1.0
     print( '[client %s] socket created' % ( client_id ))
     # bind the newly created socket object to the server's host and port (defined by the server).
     cs.connect(( HOST, PORT ))
@@ -64,19 +85,35 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
     cs.sendall( (client_msg + '\n').encode() ) # send formatted message to server
     print( '[client %s] sent message: %s' % ( client_id, client_msg ))
     state = STATE_CLIENT_RUNNING
+    # start stdin reader thread to accept interactive typing after startup
+    stdin_thread = threading.Thread(target=stdin_reader, args=(input_queue,), daemon=True)
+    stdin_thread.start()
+    # if an initial message was provided on the command line, queue it once
+    if initial_message:
+        input_queue.put(initial_message)
+        initial_message = ''
+    pending_message = None
     while( True ):
         if ( state == STATE_CLIENT_RUNNING ):
-            now = time.time()
-            if ( client_id != target_id and not has_sent_colour and now - last_send_time >= send_interval ):
+            # check for a new typed message
+            if pending_message is None:
+                try:
+                    pending_message = input_queue.get_nowait()
+                except queue.Empty:
+                    pending_message = None
+            # if we have a pending message that hasn't been sent yet, send it
+            if ( pending_message is not None ) and ( not has_sent_colour ):
+                message_text = pending_message
                 state = STATE_CLIENT_SEND_COLOUR
             else:
                 state = STATE_CLIENT_RECEIVE_COLOUR
 
 
-        elif ( state == STATE_CLIENT_SEND_COLOUR ): # check if server is alive
-            client_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id
+        elif ( state == STATE_CLIENT_SEND_COLOUR ): # send pending message to target
+            client_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ' ' + message_text
             cs.sendall( (client_msg + '\n').encode() ) # send formatted message to server
             print( '[client %s] sent message: %s' % ( client_id, client_msg ))
+            has_sent_colour = True
             last_send_time = time.time()
             state = STATE_CLIENT_RUNNING
 
@@ -109,13 +146,20 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
 
             if ( decoded_msg.startswith( 'Forwarded ' + MSG_COLOUR + ' from ' ) and len( msg_tokens ) >= 4 ):
                 sender_id = msg_tokens[3]
+                received_payload = ' '.join( msg_tokens[4:] )
+                print( '[client %s] forwarded message payload: %s' % ( client_id, received_payload ))
                 reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + sender_id
                 cs.sendall( (reply_msg + '\n').encode() )
                 print( '[client %s] sent message: %s' % ( client_id, reply_msg ))
             elif ( decoded_msg.startswith( 'Forwarded ' + MSG_RECEIVED + ' from ' ) and len( msg_tokens ) >= 4 ):
                 sender_id = msg_tokens[3]
                 print( '[client %s] got received confirmation from %s' % ( client_id, sender_id ))
-                has_sent_colour = True
+                # clear pending message so user can type a new one
+                has_received_confirmation = True
+                pending_message = None
+                message_text = ''
+                has_sent_colour = False
+                has_received_confirmation = False
 
             state = STATE_CLIENT_RUNNING
             

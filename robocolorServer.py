@@ -92,10 +92,13 @@ class client_thread( threading.Thread ):
                     self.name = client_msg_tokens[1]
                 elif ( client_msg_tokens[0] == MSG_COLOUR or client_msg_tokens[0] == MSG_RECEIVED ):
                     msg_type = client_msg_tokens[0]
+                    msg_payload = ' '.join( client_msg_tokens[3:] )
                     server_msg = 'Server has received ' + msg_type + ' from ' + self.name
                     print( '[server client %s]: sending message [%s]' % ( self.name, server_msg ))
                     self.connection.sendall( (server_msg + '\n').encode() ) # send message to client
                     forwarded_msg = 'Forwarded ' + msg_type + ' from ' + self.name
+                    if ( msg_payload ):
+                        forwarded_msg += ' ' + msg_payload
                     forwarded = False
                     with ClientListLock:
                         for other_client in ClientList:
