@@ -94,6 +94,9 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
         initial_message = ''
     pending_message = None
     while( True ):
+
+
+        
         if ( state == STATE_CLIENT_RUNNING ):
             # check for a new typed message
             if pending_message is None:
@@ -125,6 +128,9 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
             state = STATE_CLIENT_EXITING
             print( '[client %s] exiting in error state' % ( client_id ))
         
+
+
+
         elif ( state == STATE_CLIENT_RECEIVE_COLOUR ):
             try:
                 server_msg = cs.recv( 1024 )
