@@ -31,10 +31,8 @@ PORT = 50007
 
 # define messages
 MSG_REGISTER = 'REGISTER'
-MSG_COLOUR = 'COLOUR'
-MSG_COLOUR_RECEIVED = 'COLOUR_RECEIVED'
-MSG_LIST = 'LIST'
-MSG_ERROR = 'ERROR'
+MSG_PING = 'PING'
+MSG_PONG = 'PONG'
 
 # define server state variables
 STATE_SERVER_STARTING = 0
@@ -46,8 +44,8 @@ STATE_CLIENT_STARTING     = 0
 STATE_CLIENT_EXITING      = 1
 STATE_CLIENT_RUNNING      = 2
 STATE_CLIENT_ERROR        = 3
-STATE_CLIENT_RECEIVE_COLOUR = 4
-STATE_CLIENT_SEND_COLOUR    = 5
+STATE_CLIENT_RECEIVE_PING = 4
+STATE_CLIENT_SEND_PONG    = 5
 
 
 
@@ -75,62 +73,49 @@ class client_thread( threading.Thread ):
         while True:
             print( '[server client %s]: waiting for message...' % ( self.name ))
             client_msg = self.connection.recv( 1024 ) # receive message from client
+            print( '[server client %s]: message received: %s' % ( self.name, client_msg.decode() ))
             if not client_msg:
                 # if an empty message is received, then the client has disconnected; so exit.
                 self.setState( STATE_CLIENT_EXITING )
                 break
-
-            client_msg_text = client_msg.decode().strip()
-            print( '[server client %s]: message received: %s' % ( self.name, client_msg_text ))
-            if ( not client_msg_text ):
-                continue
-
-            client_msg_tokens = client_msg_text.split()
-            if ( client_msg_tokens[0] == MSG_REGISTER ):
-                # parse REGISTER <CLIENT_ID>
-                if ( len( client_msg_tokens ) < 2 ):
-                    server_msg = MSG_ERROR + ' SERVER REGISTER_FORMAT'
-                    self.connection.sendall( server_msg.encode() )
-                    continue
-
-                self.name = client_msg_tokens[1]
-                if ( self.name and registered_name != self.name ):
-                    with connected_clients_lock:
-                        if ( registered_name and registered_name in connected_clients ):
-                            del connected_clients[ registered_name ]
-                        connected_clients[ self.name ] = self.connection
-                        registered_name = self.name
-                        print( '[server main] connected client IDs: %s' % ( list( connected_clients.keys() ) ))
-
-                with connected_clients_lock:
-                    client_list_payload = ' '.join( connected_clients.keys() )
-                server_msg = MSG_LIST + ' SERVER ' + client_list_payload
-                print( '[server client %s]: sending message [%s]' % ( self.name, server_msg ))
-                self.connection.sendall( server_msg.encode() )
-            elif ( len( client_msg_tokens ) >= 3 and client_msg_tokens[0] in [ MSG_COLOUR, MSG_COLOUR_RECEIVED ] ):
-                # parse COLOUR <FROM> <TO> [<COLOUR>...]
-                msg_from = client_msg_tokens[1]
-                msg_to = client_msg_tokens[2]
-                msg_colour = ' '.join( client_msg_tokens[3:] )
-
-                forward_msg = client_msg_text
-                with connected_clients_lock:
-                    if ( msg_to in connected_clients ):
-                        target_connection = connected_clients[ msg_to ]
-                    else:
-                        target_connection = None
-
-                if ( target_connection ):
-                    print( '[server client %s]: forwarding %s from %s to %s%s' % ( self.name, client_msg_tokens[0], msg_from, msg_to, ( ' (%s)' % msg_colour ) if msg_colour else '' ))
-                    target_connection.sendall( forward_msg.encode() )
-                else:
-                    print( '[server client %s]: target client %s not found' % ( self.name, msg_to ))
-                    error_msg = MSG_ERROR + ' SERVER TARGET_NOT_FOUND ' + msg_to
-                    self.connection.sendall( error_msg.encode() )
             else:
-                print( '[server client %s]: unknown message format' % ( self.name ))
-                error_msg = MSG_ERROR + ' SERVER UNKNOWN_MESSAGE'
-                self.connection.sendall( error_msg.encode() )
+                client_msg_tokens = client_msg.decode().split()
+                if ( client_msg_tokens[0] == MSG_REGISTER ):
+                    # parse REGISTER <FROM>
+                    if ( len( client_msg_tokens ) >= 2 ):
+                        self.name = client_msg_tokens[1]
+
+                    if ( self.name and registered_name != self.name ):
+                        with connected_clients_lock:
+                            if ( registered_name and registered_name in connected_clients ):
+                                del connected_clients[ registered_name ]
+                            connected_clients[ self.name ] = self.connection
+                            registered_name = self.name
+                            client_list_payload = ' '.join( connected_clients.keys() )
+                            print( '[server main] connected client IDs: %s' % ( list( connected_clients.keys() ) ))
+
+                    # send back PONG SERVER <LIST>
+                    with connected_clients_lock:
+                        client_list_payload = ' '.join( connected_clients.keys() )
+                    server_msg = 'PONG SERVER ' + client_list_payload
+                    print( '[server client %s]: sending message [%s]' % ( self.name, server_msg ))
+                    self.connection.sendall( server_msg.encode() ) # send list to client after register
+                elif ( len( client_msg_tokens ) >= 3 and client_msg_tokens[0] in [MSG_PING, MSG_PONG] ):
+                    # parse <MSG> <FROM> <TO> and forward
+                    msg_type = client_msg_tokens[0]
+                    msg_from = client_msg_tokens[1]
+                    msg_to = client_msg_tokens[2]
+                    
+                    with connected_clients_lock:
+                        if ( msg_to in connected_clients ):
+                            target_connection = connected_clients[ msg_to ]
+                            print( '[server client %s]: forwarding %s from %s to %s' % ( self.name, msg_type, msg_from, msg_to ))
+                            # forward message to target client
+                            target_connection.sendall( client_msg )
+                        else:
+                            print( '[server client %s]: target client %s not found' % ( self.name, msg_to ))
+                else:
+                    print( '[server client %s]: unknown message format' % ( self.name ))
         if ( registered_name ):
             with connected_clients_lock:
                 if ( registered_name in connected_clients ):
