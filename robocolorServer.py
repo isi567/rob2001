@@ -28,7 +28,7 @@ PORT = 50007
 # define messages
 MSG_REGISTER = 'REGISTER'
 MSG_SENT = 'MESSAGE'
-MSG_RECEIVED = 'RECEIVED'
+MSG_RECEIVED = 'MESSAGE_RECEIVED'
 
 # define server state variables
 STATE_SERVER_STARTING = 0
@@ -96,7 +96,7 @@ class client_thread( threading.Thread ):
                     server_msg = 'Server has received ' + msg_type + ' from ' + self.name
                     print( '[server client %s]: sending message [%s]' % ( self.name, server_msg ))
                     self.connection.sendall( (server_msg + '\n').encode() ) # send message to client
-                    forwarded_msg = 'Forwarded ' + msg_type + ' from ' + self.name
+                    forwarded_msg = 'Forwarding ' + msg_type + ' from ' + self.name
                     if ( msg_payload ):
                         forwarded_msg += ' ' + msg_payload
                     forwarded = False

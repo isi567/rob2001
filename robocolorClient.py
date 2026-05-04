@@ -30,7 +30,7 @@ PORT = 50007
 # define messages
 MSG_REGISTER = 'REGISTER'
 MSG_SENT = 'MESSAGE'
-MSG_RECEIVED = 'RECEIVED'
+MSG_RECEIVED = 'MESSAGE_RECEIVED'
 
 # define client thread state variables
 STATE_CLIENT_STARTING     = 0
@@ -113,7 +113,7 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
 
 
         elif ( state == STATE_CLIENT_SEND_COLOUR ): # send pending message to target
-            client_msg = MSG_SENT + ' from ' + client_id + ' to ' + target_id + ' ' + message_text
+            client_msg = MSG_SENT + ' from ' + client_id + ' to ' + target_id + ': ' + message_text
             cs.sendall( (client_msg + '\n').encode() ) # send formatted message to server
             print( '[client %s] sent message: %s' % ( client_id, client_msg ))
             has_sent_colour = True
@@ -150,16 +150,16 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
             print( '[client %s] received message: %s' % ( client_id, decoded_msg ))
             msg_tokens = decoded_msg.split()
 
-            if ( decoded_msg.startswith( 'Forwarded ' + MSG_SENT + ' from ' ) and len( msg_tokens ) >= 4 ):
+            if ( decoded_msg.startswith( 'Forwarding ' + MSG_SENT + ' from ' ) and len( msg_tokens ) >= 4 ):
                 sender_id = msg_tokens[3]
                 received_payload = ' '.join( msg_tokens[4:] )
                 print( '[client %s] forwarded message payload: %s' % ( client_id, received_payload ))
                 reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + sender_id
                 cs.sendall( (reply_msg + '\n').encode() )
                 print( '[client %s] sent message: %s' % ( client_id, reply_msg ))
-            elif ( decoded_msg.startswith( 'Forwarded ' + MSG_RECEIVED + ' from ' ) and len( msg_tokens ) >= 4 ):
+            elif ( decoded_msg.startswith( 'Forwarding ' + MSG_RECEIVED + ' from ' ) and len( msg_tokens ) >= 4 ):
                 sender_id = msg_tokens[3]
-                print( '[client %s] got received confirmation from %s' % ( client_id, sender_id ))
+                print( '[client %s] interaction complete: received confirmation from %s' % ( client_id, sender_id ) + '. Ready for next message' )
                 # clear pending message so user can type a new one
                 has_received_confirmation = True
                 pending_message = None
