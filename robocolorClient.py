@@ -27,17 +27,16 @@ PORT = 50007
 
 # define messages
 MSG_REGISTER = 'REGISTER'
-MSG_PING = 'PING'
-MSG_PONG = 'PONG'
 MSG_SERVER = 'SERVER'
+MSG_COLOUR = 'GREEN'
 
 # define client thread state variables
 STATE_CLIENT_STARTING     = 0
 STATE_CLIENT_EXITING      = 1
 STATE_CLIENT_RUNNING      = 2
 STATE_CLIENT_ERROR        = 3
-STATE_CLIENT_SEND_PING    = 4
-STATE_CLIENT_RECEIVE_PONG = 5
+STATE_CLIENT_SEND_COLOUR    = 4
+STATE_CLIENT_RECEIVE_COLOUR = 5
 
 # client ID is command line argument
 client_id = sys.argv[1]
@@ -59,16 +58,16 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
         if ( state == STATE_CLIENT_RUNNING ):
             print( '[client %s] running' % ( client_id ))
             time.sleep( 5 )
-            state = STATE_CLIENT_SEND_PING
-        elif ( state == STATE_CLIENT_SEND_PING ): # check if server is alive
-            client_msg = MSG_PING + ' ' + client_id + ' ' + MSG_SERVER
+            state = STATE_CLIENT_SEND_COLOUR
+        elif ( state == STATE_CLIENT_SEND_COLOUR ): # check if server is alive
+            client_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + MSG_SERVER
             cs.sendall( client_msg.encode() ) # send formatted message to server
             print( '[client %s] sent message: %s' % ( client_id, client_msg ))
-            state = STATE_CLIENT_RECEIVE_PONG
-        elif ( state == STATE_CLIENT_RECEIVE_PONG ): # wait for message from server
+            state = STATE_CLIENT_RECEIVE_COLOUR
+        elif ( state == STATE_CLIENT_RECEIVE_COLOUR ): # wait for message from server
             server_msg = cs.recv( 1024 )
             print( '[client %s] received message: %s' % ( client_id, server_msg.decode() ))
-            if ( server_msg.decode() == MSG_PONG + ' ' + client_id): # server is alive
+            if ( server_msg.decode() == 'Server has received ' + MSG_COLOUR + ' from ' + client_id): # server is alive
                 state = STATE_CLIENT_RUNNING
             else:
                 state = STATE_CLIENT_ERROR
