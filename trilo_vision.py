@@ -32,7 +32,7 @@ import find
 
 # network protocol constants (must match roboserver1.py)
 MSG_REGISTER = 'REGISTER'
-MSG_COLOUR = 'COLOUR'
+MSG_COLOUR = 'GREEN'
 MSG_RECEIVED = 'RECEIVED'
 MSG_LIST = 'LIST'
 MSG_ERROR = 'ERROR'
@@ -217,10 +217,14 @@ while True:
 
     # send detected colour updates to target robot via server
     now = time.time()
+    # if we detect a new colour, allow sending again (clear confirmation)
+    if detected_colour and detected_colour != last_sent_colour:
+        has_received_confirmation = False
+
     if ( detected_colour and target_client and ( detected_colour != last_sent_colour or now - last_send_time >= min_send_interval ) ):
         out_msg = MSG_COLOUR + ' ' + client_id + ' ' + target_client + ' ' + detected_colour
         try:
-            cs.sendall( out_msg.encode() )
+            cs.sendall( (out_msg + '\n').encode() )
             print( '[vision %s] sent: %s' % ( client_id, out_msg ))
             last_sent_colour = detected_colour
             last_send_time = now

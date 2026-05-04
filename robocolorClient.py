@@ -96,7 +96,7 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
     while( True ):
 
 
-        
+
         if ( state == STATE_CLIENT_RUNNING ):
             # check for a new typed message
             if pending_message is None:
