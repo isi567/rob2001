@@ -288,39 +288,35 @@ try:
     #################################################################
 
         if mission_state == STATE_MISSION_LOOKING_FOR_GREEN:
-            # Search for green - turn/drive toward it
+            # Search for green and move toward it until close
             if centers.get("green") is not None:
                 green_x = centers.get("green")[0]
-                now = time.time()
-                if green_found_time == 0.0:
-                    green_found_time = now
-                # Check if we've confirmed green for threshold time
-                if now - green_found_time >= green_detection_threshold:
-                    print('[vision %s] Found green, moving to FOUND_GREEN state' % (client_id))
-                    mission_state = STATE_MISSION_FOUND_GREEN
-                    green_found_time = 0.0
+                distance = get_distance()
+                
+                # Move toward green
+                if green_x < 280:
+                    turn_left()
+                elif green_x > 360:
+                    turn_right()
                 else:
-                    # Still confirming - move toward green
-                    if green_x < 280:
-                        turn_left()
-                    elif green_x > 360:
-                        turn_right()
+                    if distance < 15:
+                        # Close enough to green - stop and transition
+                        print('[vision %s] Reached green (distance: %fcm), moving to FOUND_GREEN state' % (client_id, distance))
+                        tbot.stop()
+                        mission_state = STATE_MISSION_FOUND_GREEN
                     else:
-                        if get_distance() < 10:
-                            go_backward()
-                        else:
-                            go_forward()
+                        go_forward()
             else:
-                # No green found - keep searching
-                green_found_time = 0.0
+                # No green found - keep searching by turning
                 sharp_right()
 
         elif mission_state == STATE_MISSION_FOUND_GREEN:
-            # Send message that we found green
+            # At green location - send message and transition to looking for red
             out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': green_found'
             try:
                 cs.sendall( (out_msg + '\n').encode() )
                 print( '[vision %s] sent: %s' % ( client_id, out_msg ))
+                print('[vision %s] Now looking for red' % (client_id))
                 mission_state = STATE_MISSION_LOOKING_FOR_RED
             except Exception as e:
                 print( '[vision %s] send error: %s' % ( client_id, e ))
