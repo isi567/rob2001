@@ -148,6 +148,36 @@ def get_distance():
     print( 'distance from nearest object = %fcm' % ( distance ))
     return( distance )
 
+def safe_cleanup( sock=None, camera=None ):
+    # Best-effort shutdown to avoid GPIO/PWM cleanup errors on exit.
+    try:
+        tbot.stop()
+    except Exception:
+        pass
+
+    try:
+        lights_off()
+    except Exception:
+        pass
+
+    try:
+        if ( camera is not None ):
+            camera.stop()
+    except Exception:
+        pass
+
+    try:
+        if ( sock is not None ):
+            sock.close()
+    except Exception:
+        pass
+
+    try:
+        gpio_module = __import__( 'RPi.GPIO', fromlist=[ 'GPIO' ] )
+        gpio_module.cleanup()
+    except Exception:
+        pass
+
 #-----
 # main
 #-----
@@ -176,61 +206,69 @@ picam2.start()
 
 # connect to server and register this Trilobot client
 cs = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-cs.connect(( server_host, server_port ))
-cs.settimeout( 0.5 )
-register_msg = MSG_REGISTER + ' ' + client_id
-cs.sendall( ( register_msg + '\n' ).encode() )
-register_reply = cs.recv( 1024 ).decode().strip()
-print( '[vision %s] register reply: %s' % ( client_id, register_reply ))
+try:
+    cs.connect(( server_host, server_port ))
+    cs.settimeout( 0.5 )
+    register_msg = MSG_REGISTER + ' ' + client_id
+    cs.sendall( ( register_msg + '\n' ).encode() )
+    try:
+        register_reply = cs.recv( 1024 ).decode().strip()
+        if ( register_reply ):
+            print( '[vision %s] register reply: %s' % ( client_id, register_reply ))
+        else:
+            print( '[vision %s] no register reply (continuing)' % ( client_id ))
+    except socket.timeout:
+        # Server may not reply to REGISTER; continue running.
+        print( '[vision %s] register reply timeout (continuing)' % ( client_id ))
 
-state = STATE_CLIENT_RUNNING
-last_sent_colour = None
-last_send_time = 0.0
-min_send_interval = 0.8
-recv_buffer = ''
-has_received_confirmation = False
+    state = STATE_CLIENT_RUNNING
+    last_sent_colour = None
+    last_send_time = 0.0
+    min_send_interval = 0.8
+    recv_buffer = ''
+    has_received_confirmation = False
 
-while True:
-    img = picam2.capture_array()
+    while True:
+        img = picam2.capture_array()
 
-    # Find centers of largest coloured areas
-    centers = find.find_colour_centers(img, colour_ranges)
+        # Find centers of largest coloured areas
+        centers = find.find_colour_centers(img, colour_ranges)
 
-    detected_colour = None
+        detected_colour = None
 
-    # Print results
-    if centers.get("red") is not None:
-        print("Red object at x:", centers.get("red")[0], "y: ", centers.get("red")[1])
-        red_lights()
-        detected_colour = 'red'
-    else:
-        print("No red objects found")
-        lights_off()
+        # Print results
+        if centers.get("red") is not None:
+            print("Red object at x:", centers.get("red")[0], "y: ", centers.get("red")[1])
+            red_lights()
+            detected_colour = 'red'
+        else:
+            print("No red objects found")
+            lights_off()
 
-    if centers.get("green") is not None:
-        print("Green object at x:", centers.get("green")[0], "y: ", centers.get("green")[1])
-        green_lights()
-        detected_colour = 'green'
-    else:
-        print("No green objects found")
-        lights_off()
+        if centers.get("green") is not None:
+            print("Green object at x:", centers.get("green")[0], "y: ", centers.get("green")[1])
+            green_lights()
+            detected_colour = 'green'
+        else:
+            print("No green objects found")
+            lights_off()
 
-    # send detected colour updates to target robot via server
-    now = time.time()
-    # if we detect a new colour, allow sending again (clear confirmation)
-    if detected_colour and detected_colour != last_sent_colour:
-        has_received_confirmation = False
+        # send detected colour updates to target robot via server
+        now = time.time()
+        # if we detect a new colour, allow sending again (clear confirmation)
+        if detected_colour and detected_colour != last_sent_colour:
+            has_received_confirmation = False
 
-    if ( detected_colour and target_client and ( detected_colour != last_sent_colour or now - last_send_time >= min_send_interval ) ):
-        out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': ' + detected_colour
-        try:
-            cs.sendall( (out_msg + '\n').encode() )
-            print( '[vision %s] sent: %s' % ( client_id, out_msg ))
-            last_sent_colour = detected_colour
-            last_send_time = now
-        except Exception as e:
-            print( '[vision %s] send error: %s' % ( client_id, e ))
-            break
+        if ( detected_colour and target_client and ( detected_colour != last_sent_colour or now - last_send_time >= min_send_interval ) ):
+            out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': ' + detected_colour
+            try:
+                cs.sendall( (out_msg + '\n').encode() )
+                print( '[vision %s] sent: %s' % ( client_id, out_msg ))
+                last_sent_colour = detected_colour
+                last_send_time = now
+            except Exception as e:
+                print( '[vision %s] send error: %s' % ( client_id, e ))
+                break
 
     #################################################################
     #
@@ -239,104 +277,110 @@ while True:
     #
     #################################################################
 
-    # An initial cut at a colour-driven control process.
-    #
-    # If we see a green area, head towards it
-    if centers.get("green") is not None:
-        green_x = centers.get("green")[0]
-        # Turn to face the green area. 320 should be the middle of the
-        # image, so if we are close to that, then just drive, else turn
-        # to reduce that.
-        if green_x < 280:
-            turn_left()
-        elif green_x > 360:
-            turn_right()
-        else:
-            if get_distance() < 10:
-                go_backward()
+        # An initial cut at a colour-driven control process.
+        #
+        # If we see a green area, head towards it
+        if centers.get("green") is not None:
+            green_x = centers.get("green")[0]
+            # Turn to face the green area. 320 should be the middle of the
+            # image, so if we are close to that, then just drive, else turn
+            # to reduce that.
+            if green_x < 280:
+                turn_left()
+            elif green_x > 360:
+                turn_right()
             else:
-                go_forward()
-    elif centers.get("red") is not None:
-        red_x = centers.get("red")[0]
-        if red_x < 280:
-            turn_left()
-        elif red_x > 360:
-            turn_right()
-        else:
-            if get_distance() < 10:
-                go_backward()
+                if get_distance() < 10:
+                    go_backward()
+                else:
+                    go_forward()
+        elif centers.get("red") is not None:
+            red_x = centers.get("red")[0]
+            if red_x < 280:
+                turn_left()
+            elif red_x > 360:
+                turn_right()
             else:
-                go_forward()
-    # Otherwise, look for it
-    else:
-        sharp_right()
-
-    now = time.time()
-    if ( state == STATE_CLIENT_RUNNING ):
-        if ( detected_colour and target_client and ( detected_colour != last_sent_colour or now - last_send_time >= min_send_interval ) and not has_received_confirmation ):
-            state = STATE_CLIENT_SEND_COLOUR
+                if get_distance() < 10:
+                    go_backward()
+                else:
+                    go_forward()
+        # Otherwise, look for it
         else:
-            state = STATE_CLIENT_RECEIVE_COLOUR
+            sharp_right()
 
-    elif ( state == STATE_CLIENT_SEND_COLOUR ):
-        out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': ' + detected_colour
-        try:
-            cs.sendall( ( out_msg + '\n' ).encode() )
-            print( '[vision %s] sent: %s' % ( client_id, out_msg ))
-            last_sent_colour = detected_colour
-            last_send_time = now
-        except Exception as e:
-            print( '[vision %s] send error: %s' % ( client_id, e ))
-            break
-        state = STATE_CLIENT_RUNNING
+        now = time.time()
+        if ( state == STATE_CLIENT_RUNNING ):
+            if ( detected_colour and target_client and ( detected_colour != last_sent_colour or now - last_send_time >= min_send_interval ) and not has_received_confirmation ):
+                state = STATE_CLIENT_SEND_COLOUR
+            else:
+                state = STATE_CLIENT_RECEIVE_COLOUR
 
-    elif ( state == STATE_CLIENT_RECEIVE_COLOUR ):
-        try:
-            chunk = cs.recv( 1024 )
-        except socket.timeout:
+        elif ( state == STATE_CLIENT_SEND_COLOUR ):
+            out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': ' + detected_colour
+            try:
+                cs.sendall( ( out_msg + '\n' ).encode() )
+                print( '[vision %s] sent: %s' % ( client_id, out_msg ))
+                last_sent_colour = detected_colour
+                last_send_time = now
+            except Exception as e:
+                print( '[vision %s] send error: %s' % ( client_id, e ))
+                break
             state = STATE_CLIENT_RUNNING
-            continue
-        except OSError:
-            state = STATE_CLIENT_EXITING
-            continue
 
-        if ( not chunk ):
-            print( '[vision %s] server disconnected' % ( client_id ))
-            state = STATE_CLIENT_EXITING
-            continue
-
-        recv_buffer += chunk.decode()
-        lines = recv_buffer.split( '\n' )
-        recv_buffer = lines[-1]
-
-        for line in lines[:-1]:
-            server_msg_text = line.strip()
-            if ( not server_msg_text ):
+        elif ( state == STATE_CLIENT_RECEIVE_COLOUR ):
+            try:
+                chunk = cs.recv( 1024 )
+            except socket.timeout:
+                state = STATE_CLIENT_RUNNING
+                continue
+            except OSError:
+                state = STATE_CLIENT_EXITING
                 continue
 
-            print( '[vision %s] received: %s' % ( client_id, server_msg_text ))
-            colour_prefix = 'Forwarding ' + MSG_COLOUR + ' from '
-            received_prefix = 'Forwarding ' + MSG_RECEIVED + ' from '
+            if ( not chunk ):
+                print( '[vision %s] server disconnected' % ( client_id ))
+                state = STATE_CLIENT_EXITING
+                continue
 
-            if ( server_msg_text.startswith( colour_prefix ) ):
-                payload = server_msg_text[ len( colour_prefix ): ]
-                if ( ' to ' in payload and ':' in payload ):
-                    msg_from, remainder = payload.split( ' to ', 1 )
-                    msg_to_text, msg_colour = remainder.split( ':', 1 )
-                    msg_to = msg_to_text.strip()
-                    msg_colour = msg_colour.strip().lower()
-                    if ( msg_to == client_id ):
-                        print( '[vision %s] peer %s colour: %s' % ( client_id, msg_from, msg_colour ))
-                        apply_colour_lights( msg_colour )
-                        reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
-                        cs.sendall( ( reply_msg + '\n' ).encode() )
-                        print( '[vision %s] sent: %s' % ( client_id, reply_msg ))
-            elif ( server_msg_text.startswith( received_prefix ) ):
-                payload = server_msg_text[ len( received_prefix ): ]
-                if ( ' to ' in payload ):
-                    msg_from, msg_to = payload.split( ' to ', 1 )
-                    if ( msg_to.strip() == client_id ):
-                        print( '[vision %s] got received confirmation from %s' % ( client_id, msg_from ))
-                        has_received_confirmation = True
+            recv_buffer += chunk.decode()
+            lines = recv_buffer.split( '\n' )
+            recv_buffer = lines[-1]
 
-        state = STATE_CLIENT_RUNNING
+            for line in lines[:-1]:
+                server_msg_text = line.strip()
+                if ( not server_msg_text ):
+                    continue
+
+                print( '[vision %s] received: %s' % ( client_id, server_msg_text ))
+                colour_prefix = 'Forwarding ' + MSG_COLOUR + ' from '
+                received_prefix = 'Forwarding ' + MSG_RECEIVED + ' from '
+
+                if ( server_msg_text.startswith( colour_prefix ) ):
+                    payload = server_msg_text[ len( colour_prefix ): ]
+                    if ( ' to ' in payload and ':' in payload ):
+                        msg_from, remainder = payload.split( ' to ', 1 )
+                        msg_to_text, msg_colour = remainder.split( ':', 1 )
+                        msg_to = msg_to_text.strip()
+                        msg_colour = msg_colour.strip().lower()
+                        if ( msg_to == client_id ):
+                            print( '[vision %s] peer %s colour: %s' % ( client_id, msg_from, msg_colour ))
+                            apply_colour_lights( msg_colour )
+                            reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
+                            cs.sendall( ( reply_msg + '\n' ).encode() )
+                            print( '[vision %s] sent: %s' % ( client_id, reply_msg ))
+                elif ( server_msg_text.startswith( received_prefix ) ):
+                    payload = server_msg_text[ len( received_prefix ): ]
+                    if ( ' to ' in payload ):
+                        msg_from, msg_to = payload.split( ' to ', 1 )
+                        if ( msg_to.strip() == client_id ):
+                            print( '[vision %s] got received confirmation from %s' % ( client_id, msg_from ))
+                            has_received_confirmation = True
+
+            state = STATE_CLIENT_RUNNING
+except KeyboardInterrupt:
+    print( '[vision %s] interrupted by user' % ( client_id ))
+except Exception as e:
+    print( '[vision %s] fatal error: %s' % ( client_id, e ))
+finally:
+    safe_cleanup( cs, picam2 )
