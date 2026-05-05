@@ -37,7 +37,7 @@ MSG_RECEIVED = 'MESSAGE_RECEIVED'
 MSG_LIST = 'LIST'
 MSG_ERROR = 'ERROR'
 
-HOST = 'localhost'
+HOST = '10.247.72.18'
 PORT = 50007
 
 # define client thread state variables
