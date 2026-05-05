@@ -184,6 +184,10 @@ def safe_cleanup( sock=None, camera=None ):
         gpio_module.cleanup()
     except Exception:
         pass
+    try:
+        cv2.destroyAllWindows()
+    except Exception:
+        pass
 
 #-----
 # main
@@ -201,6 +205,10 @@ if ( len( sys.argv ) >= 4 ):
     server_host = sys.argv[3]
 if ( len( sys.argv ) >= 5 ):
     server_port = int( sys.argv[4] )
+# Optional 6th argument: enable preview window (values: 1, true, show, on)
+show_preview = False
+if ( len( sys.argv ) >= 6 ):
+    show_preview = str(sys.argv[3]).lower() in ( '1', 'true', 'show', 'on' )
 
 # initialise a "tbot" object
 print( 'hello!' )
@@ -263,6 +271,30 @@ try:
         else:
             print("No green objects found")
             lights_off()
+
+        # If preview is enabled, draw centers and show the camera image
+        if 'show_preview' in globals() and show_preview:
+            try:
+                disp = img.copy()
+                for cname, center in centers.items():
+                    if center is not None:
+                        cx = int(center[0])
+                        cy = int(center[1])
+                        cv2.circle(disp, (cx, cy), 12, colour_ranges[cname]['draw_colour'], 2)
+                        cv2.putText(disp, cname, (cx + 14, cy + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, colour_ranges[cname]['draw_colour'], 2)
+                cv2.imshow('trilo_cam', disp)
+                # pressing 'q' in the preview will disable preview and close window
+                k = cv2.waitKey(1) & 0xFF
+                if k == ord('q'):
+                    print('[vision %s] preview window closed by user' % (client_id))
+                    show_preview = False
+                    try:
+                        cv2.destroyAllWindows()
+                    except Exception:
+                        pass
+            except Exception as e:
+                print('[vision %s] preview error: %s' % (client_id, e))
+                show_preview = False
 
         # send detected colour updates to target robot via server
         now = time.time()
