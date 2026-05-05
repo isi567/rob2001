@@ -29,6 +29,55 @@ from picamera2 import Picamera2
 import cv2
 # import additional code -- this is where the real vision code lives.
 import find
+import os
+import threading
+import http.server
+import socketserver
+import io
+
+# MJPEG streaming globals
+mjpeg_server = None
+mjpeg_thread = None
+latest_jpeg = None
+mjpeg_port = 8080
+
+class StreamingHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path != '/stream':
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header('Age', '0')
+        self.send_header('Cache-Control', 'no-cache, private')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
+        self.end_headers()
+        try:
+            while True:
+                if latest_jpeg is None:
+                    time.sleep(0.1)
+                    continue
+                self.wfile.write(b'--FRAME\r\n')
+                self.send_header('Content-Type', 'image/jpeg')
+                self.send_header('Content-Length', str(len(latest_jpeg)))
+                self.end_headers()
+                self.wfile.write(latest_jpeg)
+                self.wfile.write(b'\r\n')
+                time.sleep(0.05)
+        except Exception:
+            return
+
+def start_mjpeg_server(port=mjpeg_port):
+    global mjpeg_server, mjpeg_thread
+    class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+        daemon_threads = True
+    try:
+        mjpeg_server = ThreadingHTTPServer(('', port), StreamingHandler)
+        mjpeg_thread = threading.Thread(target=mjpeg_server.serve_forever, daemon=True)
+        mjpeg_thread.start()
+        print('[vision] MJPEG server started on port %d' % (port))
+    except Exception as e:
+        print('[vision] failed to start MJPEG server: %s' % (e,))
 
 # network protocol constants (must match roboserver1.py)
 MSG_REGISTER = 'REGISTER'
@@ -188,6 +237,19 @@ def safe_cleanup( sock=None, camera=None ):
         cv2.destroyAllWindows()
     except Exception:
         pass
+    # Shutdown MJPEG server if running
+    try:
+        if 'mjpeg_server' in globals() and mjpeg_server is not None:
+            try:
+                mjpeg_server.shutdown()
+            except Exception:
+                pass
+            try:
+                mjpeg_server.server_close()
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 #-----
 # main
@@ -278,16 +340,29 @@ try:
                         cy = int(center[1])
                         cv2.circle(disp, (cx, cy), 12, colour_ranges[cname]['draw_colour'], 2)
                         cv2.putText(disp, cname, (cx + 14, cy + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, colour_ranges[cname]['draw_colour'], 2)
-                cv2.imshow('trilo_cam', disp)
-                # pressing 'q' in the preview will disable preview and close window
-                k = cv2.waitKey(1) & 0xFF
-                if k == ord('q'):
-                    print('[vision %s] preview window closed by user' % (client_id))
-                    show_preview = False
+
+                # If an X DISPLAY is available, show a window; otherwise populate MJPEG frame
+                if os.environ.get('DISPLAY'):
+                    cv2.imshow('trilo_cam', disp)
+                    k = cv2.waitKey(1) & 0xFF
+                    if k == ord('q'):
+                        print('[vision %s] preview window closed by user' % (client_id))
+                        show_preview = False
+                        try:
+                            cv2.destroyAllWindows()
+                        except Exception:
+                            pass
+                else:
+                    # ensure server started
+                    if 'mjpeg_server' in globals() and mjpeg_server is None:
+                        start_mjpeg_server(port=mjpeg_port)
+                    # encode JPEG into global latest_jpeg for streaming
                     try:
-                        cv2.destroyAllWindows()
-                    except Exception:
-                        pass
+                        ret, buf = cv2.imencode('.jpg', disp, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                        if ret:
+                            latest_jpeg = buf.tobytes()
+                    except Exception as e:
+                        print('[vision %s] jpeg encode error: %s' % (client_id, e))
             except Exception as e:
                 print('[vision %s] preview error: %s' % (client_id, e))
                 show_preview = False
