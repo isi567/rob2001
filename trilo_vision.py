@@ -32,8 +32,8 @@ import find
 
 # network protocol constants (must match roboserver1.py)
 MSG_REGISTER = 'REGISTER'
-MSG_COLOUR = 'GREEN'
-MSG_RECEIVED = 'RECEIVED'
+MSG_COLOUR = 'MESSAGE'
+MSG_RECEIVED = 'MESSAGE_RECEIVED'
 MSG_LIST = 'LIST'
 MSG_ERROR = 'ERROR'
 
@@ -222,7 +222,7 @@ while True:
         has_received_confirmation = False
 
     if ( detected_colour and target_client and ( detected_colour != last_sent_colour or now - last_send_time >= min_send_interval ) ):
-        out_msg = MSG_COLOUR + ' ' + client_id + ' ' + target_client + ' ' + detected_colour
+        out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': ' + detected_colour
         try:
             cs.sendall( (out_msg + '\n').encode() )
             print( '[vision %s] sent: %s' % ( client_id, out_msg ))
@@ -279,7 +279,7 @@ while True:
             state = STATE_CLIENT_RECEIVE_COLOUR
 
     elif ( state == STATE_CLIENT_SEND_COLOUR ):
-        out_msg = MSG_COLOUR + ' ' + client_id + ' ' + target_client + ' ' + detected_colour
+        out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': ' + detected_colour
         try:
             cs.sendall( ( out_msg + '\n' ).encode() )
             print( '[vision %s] sent: %s' % ( client_id, out_msg ))
@@ -315,23 +315,28 @@ while True:
                 continue
 
             print( '[vision %s] received: %s' % ( client_id, server_msg_text ))
-            tokens = server_msg_text.split()
+            colour_prefix = 'Forwarding ' + MSG_COLOUR + ' from '
+            received_prefix = 'Forwarding ' + MSG_RECEIVED + ' from '
 
-            if ( len( tokens ) >= 4 and tokens[0] == MSG_COLOUR ):
-                msg_from = tokens[1]
-                msg_to = tokens[2]
-                msg_colour = ' '.join( tokens[3:] ).lower()
-                if ( msg_to == client_id ):
-                    print( '[vision %s] peer %s colour: %s' % ( client_id, msg_from, msg_colour ))
-                    apply_colour_lights( msg_colour )
-                    reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
-                    cs.sendall( ( reply_msg + '\n' ).encode() )
-                    print( '[vision %s] sent: %s' % ( client_id, reply_msg ))
-            elif ( len( tokens ) >= 4 and tokens[0] == MSG_RECEIVED ):
-                msg_from = tokens[1]
-                msg_to = tokens[2]
-                if ( msg_to == client_id ):
-                    print( '[vision %s] got received confirmation from %s' % ( client_id, msg_from ))
-                    has_received_confirmation = True
+            if ( server_msg_text.startswith( colour_prefix ) ):
+                payload = server_msg_text[ len( colour_prefix ): ]
+                if ( ' to ' in payload and ':' in payload ):
+                    msg_from, remainder = payload.split( ' to ', 1 )
+                    msg_to_text, msg_colour = remainder.split( ':', 1 )
+                    msg_to = msg_to_text.strip()
+                    msg_colour = msg_colour.strip().lower()
+                    if ( msg_to == client_id ):
+                        print( '[vision %s] peer %s colour: %s' % ( client_id, msg_from, msg_colour ))
+                        apply_colour_lights( msg_colour )
+                        reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
+                        cs.sendall( ( reply_msg + '\n' ).encode() )
+                        print( '[vision %s] sent: %s' % ( client_id, reply_msg ))
+            elif ( server_msg_text.startswith( received_prefix ) ):
+                payload = server_msg_text[ len( received_prefix ): ]
+                if ( ' to ' in payload ):
+                    msg_from, msg_to = payload.split( ' to ', 1 )
+                    if ( msg_to.strip() == client_id ):
+                        print( '[vision %s] got received confirmation from %s' % ( client_id, msg_from ))
+                        has_received_confirmation = True
 
         state = STATE_CLIENT_RUNNING
