@@ -312,15 +312,16 @@ try:
 
         elif mission_state == STATE_MISSION_FOUND_GREEN:
             # At green location - send message and transition to looking for red
-            out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': green_found'
-            try:
-                cs.sendall( (out_msg + '\n').encode() )
-                print( '[vision %s] sent: %s' % ( client_id, out_msg ))
-                print('[vision %s] Now looking for red' % (client_id))
-                mission_state = STATE_MISSION_LOOKING_FOR_RED
-            except Exception as e:
-                print( '[vision %s] send error: %s' % ( client_id, e ))
-                break
+            if target_client:
+                out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': green_found'
+                try:
+                    cs.sendall( (out_msg + '\n').encode() )
+                    print( '[vision %s] sent: %s' % ( client_id, out_msg ))
+                except Exception as e:
+                    print( '[vision %s] send error: %s' % ( client_id, e ))
+                    break
+            print('[vision %s] Now looking for red' % (client_id))
+            mission_state = STATE_MISSION_LOOKING_FOR_RED
 
         elif mission_state == STATE_MISSION_LOOKING_FOR_RED:
             # Search for red - turn/drive toward it
