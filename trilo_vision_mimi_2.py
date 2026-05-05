@@ -64,13 +64,13 @@ TURN_TIME   = 0.6
 # Set colour thresholds. The thresholds are in the HSV colour space
 colour_ranges = {
         'red': {
-            'lower': np.array([100, 50, 50]),
-            'upper': np.array([130, 255, 255]),
+            'lower': np.array([0, 100, 100]),
+            'upper': np.array([10, 255, 255]),
             'draw_colour': (0, 0, 255)  # BGR format
         },
         'green': {
-            'lower': np.array([40, 50, 50]),
-            'upper': np.array([80, 255, 255]),
+            'lower': np.array([50, 80, 80]),
+            'upper': np.array([70, 255, 255]),
             'draw_colour': (0, 255, 0)
         }
     }
