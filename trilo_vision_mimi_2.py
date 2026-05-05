@@ -48,6 +48,13 @@ STATE_CLIENT_ERROR        = 3
 STATE_CLIENT_SEND_COLOUR    = 4
 STATE_CLIENT_RECEIVE_COLOUR = 5
 
+# Mission state variables
+STATE_MISSION_LOOKING_FOR_GREEN = 10
+STATE_MISSION_FOUND_GREEN = 11
+STATE_MISSION_LOOKING_FOR_RED = 12
+STATE_MISSION_RETURN_TO_RED = 13
+STATE_MISSION_WAITING = 14
+
 # set parameters for controlling how far the trilobot moves
 DRIVE_SPEED = 1.0
 DRIVE_TIME  = 1.2
@@ -57,13 +64,13 @@ TURN_TIME   = 0.6
 # Set colour thresholds. The thresholds are in the HSV colour space
 colour_ranges = {
         'red': {
-            'lower': np.array([100, 50, 50]),
-            'upper': np.array([130, 255, 255]),
+            'lower': np.array([0, 120, 120]),
+            'upper': np.array([10, 255, 255]),
             'draw_colour': (0, 0, 255)  # BGR format
         },
         'green': {
-            'lower': np.array([40, 50, 50]),
-            'upper': np.array([80, 255, 255]),
+            'lower': np.array([50, 80, 80]),
+            'upper': np.array([70, 255, 255]),
             'draw_colour': (0, 255, 0)
         }
     }
@@ -183,17 +190,13 @@ def safe_cleanup( sock=None, camera=None ):
 #-----
 
 if ( len( sys.argv ) < 3 ):
-    print( 'usage: python "trilo_vision (1).py" <ID> <TARGET_ID> [HOST] [PORT]' )
+    print( 'usage: python trilo_vision_mimi_2.py <ID> <TARGET_ID>' )
     sys.exit( 1 )
 
 client_id = sys.argv[1]
 target_client = sys.argv[2]
 server_host = HOST
 server_port = PORT
-if ( len( sys.argv ) >= 4 ):
-    server_host = sys.argv[3]
-if ( len( sys.argv ) >= 5 ):
-    server_port = int( sys.argv[4] )
 
 # initialise a "tbot" object
 print( 'hello!' )
@@ -222,17 +225,27 @@ try:
         print( '[vision %s] register reply timeout (continuing)' % ( client_id ))
 
     state = STATE_CLIENT_RUNNING
+    mission_state = STATE_MISSION_LOOKING_FOR_GREEN
     last_sent_colour = None
     last_send_time = 0.0
     min_send_interval = 0.8
     recv_buffer = ''
     has_received_confirmation = False
+    green_found_time = 0.0
+    red_found_time = 0.0
+    green_detection_threshold = 1.0  # seconds to confirm detection
 
     while True:
         img = picam2.capture_array()
 
+        # Picamera2 returns RGB; convert to BGR for color detection and display
+        try:
+            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        except Exception:
+            img_bgr = img
+
         # Find centers of largest coloured areas
-        centers = find.find_color_centers(img, colour_ranges)
+        centers = find.find_color_centers(img_bgr, colour_ranges)
 
         detected_colour = None
 
@@ -272,42 +285,104 @@ try:
 
     #################################################################
     #
-    # This is where you make a decision based on where the centres of
-    # the coloured areas are.
+    # Control logic based on mission state machine
     #
     #################################################################
 
-        # An initial cut at a colour-driven control process.
-        #
-        # If we see a green area, head towards it
-        if centers.get("green") is not None:
-            green_x = centers.get("green")[0]
-            # Turn to face the green area. 320 should be the middle of the
-            # image, so if we are close to that, then just drive, else turn
-            # to reduce that.
-            if green_x < 280:
-                turn_left()
-            elif green_x > 360:
-                turn_right()
-            else:
-                if get_distance() < 10:
-                    go_backward()
+        if mission_state == STATE_MISSION_LOOKING_FOR_GREEN:
+            # Search for green and move toward it until close
+            if centers.get("green") is not None:
+                green_x = centers.get("green")[0]
+                distance = get_distance()
+                
+                # Move toward green
+                if green_x < 280:
+                    turn_left()
+                elif green_x > 360:
+                    turn_right()
                 else:
-                    go_forward()
-        elif centers.get("red") is not None:
-            red_x = centers.get("red")[0]
-            if red_x < 280:
-                turn_left()
-            elif red_x > 360:
-                turn_right()
+                    if distance < 15:
+                        # Close enough to green - stop and transition
+                        print('[vision %s] Reached green (distance: %fcm), moving to FOUND_GREEN state' % (client_id, distance))
+                        tbot.stop()
+                        mission_state = STATE_MISSION_FOUND_GREEN
+                    else:
+                        go_forward()
             else:
-                if get_distance() < 10:
-                    go_backward()
+                # No green found - keep searching by turning
+                sharp_right()
+
+        elif mission_state == STATE_MISSION_FOUND_GREEN:
+            # At green location - send message and transition to looking for red
+            if target_client:
+                out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': green_found'
+                try:
+                    cs.sendall( (out_msg + '\n').encode() )
+                    print( '[vision %s] sent: %s' % ( client_id, out_msg ))
+                except Exception as e:
+                    print( '[vision %s] send error: %s' % ( client_id, e ))
+                    break
+            print('[vision %s] Now looking for red' % (client_id))
+            mission_state = STATE_MISSION_LOOKING_FOR_RED
+
+        elif mission_state == STATE_MISSION_LOOKING_FOR_RED:
+            # Search for red - turn/drive toward it
+            if centers.get("red") is not None:
+                red_x = centers.get("red")[0]
+                now = time.time()
+                if red_found_time == 0.0:
+                    red_found_time = now
+                # Check if we've confirmed red for threshold time
+                if now - red_found_time >= green_detection_threshold:
+                    print('[vision %s] Found red, moving to RETURN_TO_RED state' % (client_id))
+                    mission_state = STATE_MISSION_RETURN_TO_RED
+                    red_found_time = 0.0
                 else:
-                    go_forward()
-        # Otherwise, look for it
-        else:
-            sharp_right()
+                    # Still confirming - move toward red
+                    if red_x < 280:
+                        turn_left()
+                    elif red_x > 360:
+                        turn_right()
+                    else:
+                        if get_distance() < 10:
+                            go_backward()
+                        else:
+                            go_forward()
+            else:
+                # No red found - keep searching
+                red_found_time = 0.0
+                sharp_right()
+
+        elif mission_state == STATE_MISSION_RETURN_TO_RED:
+            # Continue moving toward red
+            if centers.get("red") is not None:
+                red_x = centers.get("red")[0]
+                if red_x < 280:
+                    turn_left()
+                elif red_x > 360:
+                    turn_right()
+                else:
+                    if get_distance() < 10:
+                        go_backward()
+                    else:
+                        go_forward()
+            else:
+                # Lost red - search for it again
+                sharp_right()
+            
+            # Check if we've been with red long enough, then wait
+            now = time.time()
+            if red_found_time == 0.0:
+                red_found_time = now
+            if now - red_found_time >= 3.0:  # Wait 3 seconds with red before moving to waiting state
+                print('[vision %s] At red location, moving to WAITING state' % (client_id))
+                mission_state = STATE_MISSION_WAITING
+                red_found_time = 0.0
+
+        elif mission_state == STATE_MISSION_WAITING:
+            # Wait for new instructions - stop moving
+            tbot.stop()
+            print('[vision %s] Waiting for new instructions' % (client_id))
 
         now = time.time()
         if ( state == STATE_CLIENT_RUNNING ):
