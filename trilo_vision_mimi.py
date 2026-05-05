@@ -232,7 +232,7 @@ try:
         img = picam2.capture_array()
 
         # Find centers of largest coloured areas
-        centers = find.find_colour_centers(img, colour_ranges)
+        centers = find.find_color_centers(img, colour_ranges)
 
         detected_colour = None
 
