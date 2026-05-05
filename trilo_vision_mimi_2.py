@@ -194,20 +194,16 @@ def safe_cleanup( sock=None, camera=None ):
 #-----
 
 if ( len( sys.argv ) < 3 ):
-    print( 'usage: python "trilo_vision (1).py" <ID> <TARGET_ID> [HOST] [PORT]' )
+    print( 'usage: python trilo_vision_mimi_2.py <ID> <TARGET_ID> [PREVIEW_FLAG]' )
     sys.exit( 1 )
 
 client_id = sys.argv[1]
 target_client = sys.argv[2]
 server_host = HOST
 server_port = PORT
-if ( len( sys.argv ) >= 4 ):
-    server_host = sys.argv[3]
-if ( len( sys.argv ) >= 5 ):
-    server_port = int( sys.argv[4] )
-# Optional 6th argument: enable preview window (values: 1, true, show, on)
+# Optional 4th argument: enable preview window (values: 1, true, show, on)
 show_preview = False
-if ( len( sys.argv ) >= 3 ):
+if ( len( sys.argv ) >= 4 ):
     show_preview = str(sys.argv[3]).lower() in ( '1', 'true', 'show', 'on' )
 
 # initialise a "tbot" object
