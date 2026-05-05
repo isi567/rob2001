@@ -308,8 +308,14 @@ try:
     while True:
         img = picam2.capture_array()
 
+        # Picamera2 returns RGB; convert to BGR for color detection and display
+        try:
+            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        except Exception:
+            img_bgr = img
+
         # Find centers of largest coloured areas
-        centers = find.find_color_centers(img, colour_ranges)
+        centers = find.find_color_centers(img_bgr, colour_ranges)
 
         detected_colour = None
 
@@ -333,7 +339,7 @@ try:
         # If preview is enabled, draw centers and show the camera image
         if 'show_preview' in globals() and show_preview:
             try:
-                disp = img.copy()
+                disp = img_bgr.copy()
                 for cname, center in centers.items():
                     if center is not None:
                         cx = int(center[0])
