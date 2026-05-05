@@ -207,7 +207,7 @@ if ( len( sys.argv ) >= 5 ):
     server_port = int( sys.argv[4] )
 # Optional 6th argument: enable preview window (values: 1, true, show, on)
 show_preview = False
-if ( len( sys.argv ) >= 6 ):
+if ( len( sys.argv ) >= 3 ):
     show_preview = str(sys.argv[3]).lower() in ( '1', 'true', 'show', 'on' )
 
 # initialise a "tbot" object
