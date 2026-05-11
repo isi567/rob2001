@@ -61,6 +61,10 @@ DRIVE_TIME  = 1.2
 TURN_SPEED  = 0.6
 TURN_TIME   = 0.6
 
+# movement gating flag: robot will not actuate motors unless this is True
+# (only enabled when a 'green' message is received addressed to this client)
+move_enabled = False
+
 # Set colour thresholds. The thresholds are in the HSV colour space
 colour_ranges = {
         'red': {
@@ -77,42 +81,63 @@ colour_ranges = {
 
 # define motion functions
 def go_forward():
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
     print( 'moving forward' )
     tbot.forward( DRIVE_SPEED )
     time.sleep( DRIVE_TIME )
     tbot.stop()
 
 def go_backward():
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
     print( 'moving backward' )
     tbot.backward( DRIVE_SPEED )
     time.sleep( DRIVE_TIME )
     tbot.stop()
 
 def turn_left():
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
     print( 'turning left' )
     tbot.curve_forward_left( TURN_SPEED )
     time.sleep( TURN_TIME )
     tbot.stop()
 
 def turn_right():
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
     print( 'turning right' )
     tbot.curve_forward_right( TURN_SPEED )
     time.sleep( TURN_TIME )
     tbot.stop()
 
 def sharp_right():
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
     print( 'sharp right' )
     tbot.turn_right( TURN_SPEED )
     time.sleep( TURN_TIME )
     tbot.stop()
 
 def turn_left():
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
     print( 'turning left' )
     tbot.curve_forward_left( TURN_SPEED )
     time.sleep( TURN_TIME )
     tbot.stop()
 
 def sharp_right():
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
     print( 'sharp left' )
     tbot.turn_left( TURN_SPEED )
     time.sleep( TURN_TIME )
@@ -441,6 +466,13 @@ try:
                         if ( msg_to == client_id ):
                             print( '[vision %s] peer %s colour: %s' % ( client_id, msg_from, msg_colour ))
                             apply_colour_lights( msg_colour )
+                            # Enable movement only when we receive a 'green' colour message
+                            if msg_colour == 'green':
+                                move_enabled = True
+                                print( '[vision %s] movement enabled (green received)' % ( client_id ))
+                            else:
+                                move_enabled = False
+                                print( '[vision %s] movement disabled (received %s)' % ( client_id, msg_colour ))
                             reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
                             cs.sendall( ( reply_msg + '\n' ).encode() )
                             print( '[vision %s] sent: %s' % ( client_id, reply_msg ))
