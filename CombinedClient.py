@@ -199,7 +199,7 @@ try:
         print( '[vision %s] register reply timeout (continuing)' % ( client_id ))
 
     state = STATE_CLIENT_RUNNING
-    mission_state = STATE_MISSION_LOOKING_FOR_GREEN
+    mission_state = STATE_MISSION_WAITING
     last_sent_colour = None
     last_send_time = 0.0
     min_send_interval = 0.8
