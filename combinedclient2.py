@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+"""
+Combined client: merges vision + Trilobot control from trilo_vision_mimi_2.py
+with messaging/interactive behaviour from robocolorClient2.py.
+
+Usage: python combinedclient2.py <ID> <TARGET_ID>
+"""
+
+import time
+import sys
+import socket
+import threading
+import queue
+import numpy as np
+import cv2
+from trilobot import Trilobot
+from picamera2 import Picamera2
+import find
+
+# network protocol constants
+MSG_REGISTER = 'REGISTER'
+MSG_COLOUR = 'MESSAGE'
+MSG_RECEIVED = 'MESSAGE_RECEIVED'
+
+HOST = '10.247.26.138'
+PORT = 50007
+
+# movement gating: robot will not actuate motors unless this is True
+move_enabled = False
+
+# motion parameters
+DRIVE_SPEED = 1.0
+DRIVE_TIME  = 1.2
+TURN_SPEED  = 0.6
+TURN_TIME   = 0.6
+
+# colour thresholds (HSV)
+colour_ranges = {
+    'red': {
+        'lower': np.array([0, 120, 120]),
+        'upper': np.array([10, 255, 255]),
+        'draw_colour': (0, 0, 255)
+    },
+    'green': {
+        'lower': np.array([50, 80, 80]),
+        'upper': np.array([70, 255, 255]),
+        'draw_colour': (0, 255, 0)
+    }
+}
+
+# define motion functions (guarded by move_enabled)
+def go_forward(tbot):
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
+    print('moving forward')
+    tbot.forward(DRIVE_SPEED)
+    time.sleep(DRIVE_TIME)
+    tbot.stop()
+
+def go_backward(tbot):
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
+    print('moving backward')
+    tbot.backward(DRIVE_SPEED)
+    time.sleep(DRIVE_TIME)
+    tbot.stop()
+
+def turn_left(tbot):
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
+    print('turning left')
+    tbot.curve_forward_left(TURN_SPEED)
+    time.sleep(TURN_TIME)
+    tbot.stop()
+
+def turn_right(tbot):
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
+    print('turning right')
+    tbot.curve_forward_right(TURN_SPEED)
+    time.sleep(TURN_TIME)
+    tbot.stop()
+
+def sharp_right(tbot):
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
+    print('sharp right')
+    tbot.turn_right(TURN_SPEED)
+    time.sleep(TURN_TIME)
+    tbot.stop()
+
+def sharp_left(tbot):
+    if not move_enabled:
+        print('movement disabled; waiting for green')
+        return
+    print('sharp left')
+    tbot.turn_left(TURN_SPEED)
+    time.sleep(TURN_TIME)
+    tbot.stop()
+
+# underlighting helpers
+def red_lights(tbot):
+    tbot.fill_underlighting((255,0,0))
+
+def green_lights(tbot):
+    tbot.fill_underlighting((0,255,0))
+
+def lights_off(tbot):
+    tbot.clear_underlighting()
+
+def apply_colour_lights(tbot, colour):
+    if colour == 'red':
+        red_lights(tbot)
+    elif colour == 'green':
+        green_lights(tbot)
+    else:
+        lights_off(tbot)
+
+def get_distance(tbot):
+    return tbot.read_distance()
+
+def safe_cleanup(tbot=None, sock=None, camera=None):
+    try:
+        if tbot is not None:
+            tbot.stop()
+    except Exception:
+        pass
+    try:
+        if tbot is not None:
+            tbot.clear_underlighting()
+    except Exception:
+        pass
+    try:
+        if camera is not None:
+            camera.stop()
+    except Exception:
+        pass
+    try:
+        if sock is not None:
+            sock.close()
+    except Exception:
+        pass
+
+def stdin_reader(q):
+    while True:
+        try:
+            line = sys.stdin.readline()
+        except Exception:
+            break
+        if not line:
+            break
+        line = line.strip()
+        if line:
+            q.put(line)
+
+def main():
+    global move_enabled
+    if len(sys.argv) < 3:
+        print('usage: python combinedclient2.py <ID> <TARGET_ID>')
+        sys.exit(1)
+
+    client_id = sys.argv[1]
+    target_id = sys.argv[2]
+
+    print('hello!')
+    tbot = Trilobot()
+
+    picam2 = Picamera2()
+    picam2.configure(picam2.create_preview_configuration(main={"size": (640,480)}))
+    picam2.start()
+
+    input_queue = queue.Queue()
+    stdin_thread = threading.Thread(target=stdin_reader, args=(input_queue,), daemon=True)
+    stdin_thread.start()
+
+    cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        cs.connect((HOST, PORT))
+        cs.settimeout(0.5)
+        cs.sendall((MSG_REGISTER + ' ' + client_id + '\n').encode())
+
+        state = 2
+        last_sent_colour = None
+        last_send_time = 0.0
+        min_send_interval = 0.8
+        recv_buffer = ''
+        has_sent_colour = False
+        has_received_confirmation = False
+
+        while True:
+            # capture image and find colours
+            img = picam2.capture_array()
+            try:
+                img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            except Exception:
+                img_bgr = img
+
+            centers = find.find_color_centers(img_bgr, colour_ranges)
+            detected_colour = None
+            if centers.get('red') is not None:
+                print('Red object at', centers.get('red'))
+                apply_colour_lights(tbot, 'red')
+                detected_colour = 'red'
+            else:
+                lights_off(tbot)
+
+            if centers.get('green') is not None:
+                print('Green object at', centers.get('green'))
+                apply_colour_lights(tbot, 'green')
+                detected_colour = 'green'
+            else:
+                lights_off(tbot)
+
+            now = time.time()
+            if detected_colour and detected_colour != last_sent_colour:
+                has_received_confirmation = False
+
+            # send detected colour to target if appropriate
+            if detected_colour and target_id and (detected_colour != last_sent_colour or now - last_send_time >= min_send_interval):
+                out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': ' + detected_colour
+                try:
+                    cs.sendall((out_msg + '\n').encode())
+                    print('[combined %s] sent: %s' % (client_id, out_msg))
+                    last_sent_colour = detected_colour
+                    last_send_time = now
+                except Exception as e:
+                    print('send error:', e)
+                    break
+
+            # check for interactive input to send arbitrary messages
+            pending_message = None
+            try:
+                pending_message = input_queue.get_nowait()
+            except queue.Empty:
+                pending_message = None
+
+            if pending_message is not None and not has_sent_colour:
+                client_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': ' + pending_message
+                cs.sendall((client_msg + '\n').encode())
+                print('[combined %s] sent: %s' % (client_id, client_msg))
+                has_sent_colour = True
+                has_received_confirmation = False
+
+            # receive and handle server messages
+            try:
+                chunk = cs.recv(1024)
+            except socket.timeout:
+                time.sleep(0.01)
+                continue
+            except OSError:
+                break
+
+            if not chunk:
+                print('server disconnected')
+                break
+
+            recv_buffer += chunk.decode()
+            lines = recv_buffer.split('\n')
+            recv_buffer = lines[-1]
+
+            for line in lines[:-1]:
+                server_msg_text = line.strip()
+                if not server_msg_text:
+                    continue
+                print('[combined %s] received: %s' % (client_id, server_msg_text))
+                colour_prefix = 'Forwarding ' + MSG_COLOUR + ' from '
+                received_prefix = 'Forwarding ' + MSG_RECEIVED + ' from '
+
+                if server_msg_text.startswith(colour_prefix):
+                    payload = server_msg_text[len(colour_prefix):]
+                    if ' to ' in payload and ':' in payload:
+                        msg_from, remainder = payload.split(' to ', 1)
+                        msg_to_text, msg_colour = remainder.split(':', 1)
+                        msg_to = msg_to_text.strip()
+                        msg_colour = msg_colour.strip().lower()
+                        if msg_to == client_id:
+                            print('[combined %s] peer %s colour: %s' % (client_id, msg_from, msg_colour))
+                            apply_colour_lights(tbot, msg_colour)
+                            # enable movement only when we receive 'green'
+                            if msg_colour == 'green':
+                                move_enabled = True
+                                print('[combined %s] movement enabled (green received)' % (client_id))
+                            else:
+                                move_enabled = False
+                                print('[combined %s] movement disabled (received %s)' % (client_id, msg_colour))
+                            # send confirmation back to sender
+                            reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
+                            cs.sendall((reply_msg + '\n').encode())
+                            print('[combined %s] sent: %s' % (client_id, reply_msg))
+                elif server_msg_text.startswith(received_prefix):
+                    payload = server_msg_text[len(received_prefix):]
+                    if ' to ' in payload:
+                        msg_from, msg_to = payload.split(' to ', 1)
+                        if msg_to.strip() == client_id:
+                            print('[combined %s] got received confirmation from %s' % (client_id, msg_from))
+                            has_received_confirmation = True
+                            has_sent_colour = False
+
+    except KeyboardInterrupt:
+        print('interrupted by user')
+    except Exception as e:
+        print('fatal error:', e)
+    finally:
+        safe_cleanup(tbot, cs, picam2)
+
+if __name__ == '__main__':
+    main()
