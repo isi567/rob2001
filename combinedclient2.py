@@ -369,7 +369,10 @@ def main():
                             # enable movement only when we receive 'green'
                             if msg_colour == 'green':
                                 move_enabled = True
-                                print('[combined %s] *** MOVEMENT ENABLED (green received from %s) ***' % (client_id, msg_from))
+                                mission_state = 10  # reset to LOOKING_FOR_GREEN to restart the sequence
+                                green_found_time = 0.0
+                                red_found_time = 0.0
+                                print('[combined %s] *** MOVEMENT ENABLED (green received from %s) - restarting mission ***' % (client_id, msg_from))
                             else:
                                 move_enabled = False
                                 print('[combined %s] movement disabled (received %s)' % (client_id, msg_colour))
