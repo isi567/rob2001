@@ -310,10 +310,10 @@ def main():
                     print('[combined %s] at red location, waiting' % client_id)
                     mission_state = 14
                     red_found_time = 0.0
+                    move_enabled = False  # Stop moving when mission complete
 
             elif mission_state == 14:  # WAITING
                 tbot.stop()
-                print('[combined %s] waiting for new instructions' % client_id)
 
             # check for interactive input to send arbitrary messages
             pending_message = None
