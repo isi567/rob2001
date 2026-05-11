@@ -1,22 +1,3 @@
-#!/usr/bin/env python3
-#
-# trilo_vision.py
-#
-# This is an extension of the tri1.py trilobot driving code to
-# incorporate vision running headless on the trilobot (based on
-# trilo_blob.py)
-#
-# tri1.py is due to
-# esklar/16-feb-2024
-# University of Lincoln
-#
-# and the rest was written by
-#
-# Simon Parsons
-# University of Lincoln
-# 26-03-13
-#
-
 # import standard packages
 import time
 import numpy as np
@@ -37,15 +18,15 @@ MSG_RECEIVED = 'MESSAGE_RECEIVED'
 MSG_LIST = 'LIST'
 MSG_ERROR = 'ERROR'
 
-HOST = '10.247.26.138'
+HOST = '10.247.72.18'
 PORT = 50007
 
 # define client thread state variables
-STATE_CLIENT_STARTING     = 0
-STATE_CLIENT_EXITING      = 1
-STATE_CLIENT_RUNNING      = 2
-STATE_CLIENT_ERROR        = 3
-STATE_CLIENT_SEND_COLOUR    = 4
+STATE_CLIENT_STARTING      = 0
+STATE_CLIENT_EXITING       = 1
+STATE_CLIENT_RUNNING       = 2
+STATE_CLIENT_ERROR         = 3
+STATE_CLIENT_SEND_COLOUR   = 4
 STATE_CLIENT_RECEIVE_COLOUR = 5
 
 # Mission state variables
@@ -106,13 +87,7 @@ def sharp_right():
     time.sleep( TURN_TIME )
     tbot.stop()
 
-def turn_left():
-    print( 'turning left' )
-    tbot.curve_forward_left( TURN_SPEED )
-    time.sleep( TURN_TIME )
-    tbot.stop()
-
-def sharp_right():
+def sharp_left():
     print( 'sharp left' )
     tbot.turn_left( TURN_SPEED )
     time.sleep( TURN_TIME )
@@ -221,7 +196,6 @@ try:
         else:
             print( '[vision %s] no register reply (continuing)' % ( client_id ))
     except socket.timeout:
-        # Server may not reply to REGISTER; continue running.
         print( '[vision %s] register reply timeout (continuing)' % ( client_id ))
 
     state = STATE_CLIENT_RUNNING
@@ -238,82 +212,46 @@ try:
     while True:
         img = picam2.capture_array()
 
-        # Picamera2 returns RGB; convert to BGR for color detection and display
         try:
             img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         except Exception:
             img_bgr = img
 
-        # Find centers of largest coloured areas
         centers = find.find_color_centers(img_bgr, colour_ranges)
-
         detected_colour = None
 
-        # Print results
         if centers.get("red") is not None:
             print("Red object at x:", centers.get("red")[0], "y: ", centers.get("red")[1])
             red_lights()
             detected_colour = 'red'
-        else:
-            print("No red objects found")
-            lights_off()
-
-        if centers.get("green") is not None:
+        elif centers.get("green") is not None:
             print("Green object at x:", centers.get("green")[0], "y: ", centers.get("green")[1])
             green_lights()
             detected_colour = 'green'
         else:
-            print("No green objects found")
+            print("No targeted objects found")
             lights_off()
 
-        # send detected colour updates to target robot via server
-        now = time.time()
-        # if we detect a new colour, allow sending again (clear confirmation)
-        if detected_colour and detected_colour != last_sent_colour:
-            has_received_confirmation = False
-
-        if ( detected_colour and target_client and ( detected_colour != last_sent_colour or now - last_send_time >= min_send_interval ) ):
-            out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': ' + detected_colour
-            try:
-                cs.sendall( (out_msg + '\n').encode() )
-                print( '[vision %s] sent: %s' % ( client_id, out_msg ))
-                last_sent_colour = detected_colour
-                last_send_time = now
-            except Exception as e:
-                print( '[vision %s] send error: %s' % ( client_id, e ))
-                break
-
-    #################################################################
-    #
-    # Control logic based on mission state machine
-    #
-    #################################################################
-
+        # MISSION STATE LOGIC
         if mission_state == STATE_MISSION_LOOKING_FOR_GREEN:
-            # Search for green and move toward it until close
             if centers.get("green") is not None:
                 green_x = centers.get("green")[0]
                 distance = get_distance()
-                
-                # Move toward green
                 if green_x < 280:
                     turn_left()
                 elif green_x > 360:
                     turn_right()
                 else:
                     if distance < 15:
-                        # Close enough to green - stop and transition
                         print('[vision %s] Reached green (distance: %fcm), moving to FOUND_GREEN state' % (client_id, distance))
                         tbot.stop()
                         mission_state = STATE_MISSION_FOUND_GREEN
                     else:
                         go_forward()
             else:
-                # No green found - keep searching by turning
                 sharp_right()
 
         elif mission_state == STATE_MISSION_FOUND_GREEN:
-            # At green location - send message and transition to looking for red
             if target_client:
                 out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_client + ': green_found'
                 try:
@@ -326,19 +264,17 @@ try:
             mission_state = STATE_MISSION_LOOKING_FOR_RED
 
         elif mission_state == STATE_MISSION_LOOKING_FOR_RED:
-            # Search for red - turn/drive toward it
             if centers.get("red") is not None:
                 red_x = centers.get("red")[0]
                 now = time.time()
                 if red_found_time == 0.0:
                     red_found_time = now
-                # Check if we've confirmed red for threshold time
+                
                 if now - red_found_time >= green_detection_threshold:
                     print('[vision %s] Found red, moving to RETURN_TO_RED state' % (client_id))
                     mission_state = STATE_MISSION_RETURN_TO_RED
                     red_found_time = 0.0
                 else:
-                    # Still confirming - move toward red
                     if red_x < 280:
                         turn_left()
                     elif red_x > 360:
@@ -349,12 +285,10 @@ try:
                         else:
                             go_forward()
             else:
-                # No red found - keep searching
                 red_found_time = 0.0
                 sharp_right()
 
         elif mission_state == STATE_MISSION_RETURN_TO_RED:
-            # Continue moving toward red
             if centers.get("red") is not None:
                 red_x = centers.get("red")[0]
                 if red_x < 280:
@@ -367,24 +301,24 @@ try:
                     else:
                         go_forward()
             else:
-                # Lost red - search for it again
                 sharp_right()
             
-            # Check if we've been with red long enough, then wait
             now = time.time()
             if red_found_time == 0.0:
                 red_found_time = now
-            if now - red_found_time >= 3.0:  # Wait 3 seconds with red before moving to waiting state
+            if now - red_found_time >= 3.0: 
                 print('[vision %s] At red location, moving to WAITING state' % (client_id))
                 mission_state = STATE_MISSION_WAITING
                 red_found_time = 0.0
 
         elif mission_state == STATE_MISSION_WAITING:
-            # Wait for new instructions - stop moving
             tbot.stop()
-            print('[vision %s] Waiting for new instructions' % (client_id))
 
+        # NETWORK STATE LOGIC
         now = time.time()
+        if detected_colour and detected_colour != last_sent_colour:
+            has_received_confirmation = False
+
         if ( state == STATE_CLIENT_RUNNING ):
             if ( detected_colour and target_client and ( detected_colour != last_sent_colour or now - last_send_time >= min_send_interval ) and not has_received_confirmation ):
                 state = STATE_CLIENT_SEND_COLOUR
@@ -436,25 +370,21 @@ try:
                     if ( ' to ' in payload and ':' in payload ):
                         msg_from, remainder = payload.split( ' to ', 1 )
                         msg_to_text, msg_colour = remainder.split( ':', 1 )
-                        msg_to = msg_to_text.strip()
-                        msg_colour = msg_colour.strip().lower()
-                        if ( msg_to == client_id ):
-                            print( '[vision %s] peer %s colour: %s' % ( client_id, msg_from, msg_colour ))
-                            apply_colour_lights( msg_colour )
+                        if ( msg_to_text.strip() == client_id ):
+                            apply_colour_lights( msg_colour.strip().lower() )
                             reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
                             cs.sendall( ( reply_msg + '\n' ).encode() )
-                            print( '[vision %s] sent: %s' % ( client_id, reply_msg ))
                 elif ( server_msg_text.startswith( received_prefix ) ):
                     payload = server_msg_text[ len( received_prefix ): ]
                     if ( ' to ' in payload ):
                         msg_from, msg_to = payload.split( ' to ', 1 )
                         if ( msg_to.strip() == client_id ):
-                            print( '[vision %s] got received confirmation from %s' % ( client_id, msg_from ))
                             has_received_confirmation = True
 
             state = STATE_CLIENT_RUNNING
+
 except KeyboardInterrupt:
-    print( '[vision %s] interrupted by user' % ( client_id ))
+    print( '[vision %s] interrupted' % ( client_id ))
 except Exception as e:
     print( '[vision %s] fatal error: %s' % ( client_id, e ))
 finally:
