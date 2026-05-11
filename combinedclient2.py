@@ -168,6 +168,8 @@ def main():
     target_id = sys.argv[2]
 
     print('hello!')
+    print('[combined %s] Target: %s' % (client_id, target_id))
+    print('[combined %s] move_enabled will be set when green is received from %s' % (client_id, target_id))
     tbot = Trilobot()
 
     picam2 = Picamera2()
@@ -191,6 +193,11 @@ def main():
         recv_buffer = ''
         has_sent_colour = False
         has_received_confirmation = False
+
+        mission_state = 10  # STATE_MISSION_LOOKING_FOR_GREEN
+        green_found_time = 0.0
+        red_found_time = 0.0
+        green_detection_threshold = 1.0
 
         while True:
             # capture image and find colours
@@ -231,6 +238,82 @@ def main():
                 except Exception as e:
                     print('send error:', e)
                     break
+
+            #################################################################
+            # Control logic based on mission state machine
+            #################################################################
+            if mission_state == 10:  # LOOKING_FOR_GREEN
+                if centers.get('green') is not None:
+                    green_x = centers.get('green')[0]
+                    distance = get_distance(tbot)
+                    if green_x < 280:
+                        turn_left(tbot)
+                    elif green_x > 360:
+                        turn_right(tbot)
+                    else:
+                        if distance < 15:
+                            print('[combined %s] reached green, moving to FOUND_GREEN' % client_id)
+                            tbot.stop()
+                            mission_state = 11
+                        else:
+                            go_forward(tbot)
+                else:
+                    sharp_right(tbot)
+
+            elif mission_state == 11:  # FOUND_GREEN
+                print('[combined %s] at green, looking for red' % client_id)
+                mission_state = 12
+
+            elif mission_state == 12:  # LOOKING_FOR_RED
+                if centers.get('red') is not None:
+                    red_x = centers.get('red')[0]
+                    now_check = time.time()
+                    if red_found_time == 0.0:
+                        red_found_time = now_check
+                    if now_check - red_found_time >= green_detection_threshold:
+                        print('[combined %s] found red, moving to RETURN_TO_RED' % client_id)
+                        mission_state = 13
+                        red_found_time = 0.0
+                    else:
+                        if red_x < 280:
+                            turn_left(tbot)
+                        elif red_x > 360:
+                            turn_right(tbot)
+                        else:
+                            if get_distance(tbot) < 10:
+                                go_backward(tbot)
+                            else:
+                                go_forward(tbot)
+                else:
+                    red_found_time = 0.0
+                    sharp_right(tbot)
+
+            elif mission_state == 13:  # RETURN_TO_RED
+                if centers.get('red') is not None:
+                    red_x = centers.get('red')[0]
+                    if red_x < 280:
+                        turn_left(tbot)
+                    elif red_x > 360:
+                        turn_right(tbot)
+                    else:
+                        if get_distance(tbot) < 10:
+                            go_backward(tbot)
+                        else:
+                            go_forward(tbot)
+                else:
+                    sharp_right(tbot)
+                
+                now_check = time.time()
+                if red_found_time == 0.0:
+                    red_found_time = now_check
+                if now_check - red_found_time >= 3.0:
+                    print('[combined %s] at red location, waiting' % client_id)
+                    mission_state = 14
+                    red_found_time = 0.0
+
+            elif mission_state == 14:  # WAITING
+                tbot.stop()
+                print('[combined %s] waiting for new instructions' % client_id)
 
             # check for interactive input to send arbitrary messages
             pending_message = None
@@ -273,18 +356,20 @@ def main():
 
                 if server_msg_text.startswith(colour_prefix):
                     payload = server_msg_text[len(colour_prefix):]
+                    print('[combined %s] DEBUG: colour_prefix matched, payload=[%s]' % (client_id, payload))
                     if ' to ' in payload and ':' in payload:
                         msg_from, remainder = payload.split(' to ', 1)
                         msg_to_text, msg_colour = remainder.split(':', 1)
                         msg_to = msg_to_text.strip()
                         msg_colour = msg_colour.strip().lower()
+                        print('[combined %s] DEBUG: msg_from=[%s], msg_to=[%s], msg_colour=[%s]' % (client_id, msg_from, msg_to, msg_colour))
                         if msg_to == client_id:
                             print('[combined %s] peer %s colour: %s' % (client_id, msg_from, msg_colour))
                             apply_colour_lights(tbot, msg_colour)
                             # enable movement only when we receive 'green'
                             if msg_colour == 'green':
                                 move_enabled = True
-                                print('[combined %s] movement enabled (green received)' % (client_id))
+                                print('[combined %s] *** MOVEMENT ENABLED (green received from %s) ***' % (client_id, msg_from))
                             else:
                                 move_enabled = False
                                 print('[combined %s] movement disabled (received %s)' % (client_id, msg_colour))
@@ -292,6 +377,8 @@ def main():
                             reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
                             cs.sendall((reply_msg + '\n').encode())
                             print('[combined %s] sent: %s' % (client_id, reply_msg))
+                        else:
+                            print('[combined %s] DEBUG: message not for us (to=%s, client_id=%s)' % (client_id, msg_to, client_id))
                 elif server_msg_text.startswith(received_prefix):
                     payload = server_msg_text[len(received_prefix):]
                     if ' to ' in payload:

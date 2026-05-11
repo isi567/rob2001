@@ -66,7 +66,6 @@ def stdin_reader(q):
         if line:
             q.put(line)
 
-lettuce_state = False
 # try to create and open a new socket object (called "cs", for client socket).
 with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
     state = STATE_CLIENT_STARTING
@@ -111,18 +110,9 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
 
 
         elif ( state == STATE_CLIENT_SEND_COLOUR ): # send pending message to target
-            counter = counter + 1
-            print(counter)
-            if lettuce_state:
-                ##########this is wrong I need to actually swap the client, not jsut the IDs
-                client_msg = MSG_SENT + ' from ' + target_id + ' to ' + client_id + ': ' + 'green'
-                cs.sendall( (client_msg + '\n').encode() ) # send formatted message to server
-                print( '[client %s] sent message: %s' % ( target_id, client_msg ))
-                lettuce_state = False
-            else:
-                client_msg = MSG_SENT + ' from ' + client_id + ' to ' + target_id + ': ' + message_text
-                cs.sendall( (client_msg + '\n').encode() ) # send formatted message to server
-                print( '[client %s] sent message: %s' % ( client_id, client_msg ))
+            client_msg = MSG_SENT + ' from ' + client_id + ' to ' + target_id + ': ' + message_text
+            cs.sendall( (client_msg + '\n').encode() ) # send formatted message to server
+            print( '[client %s] sent message: %s' % ( client_id, client_msg ))
             has_sent_colour = True
             last_send_time = time.time()
             state = STATE_CLIENT_RUNNING
@@ -161,13 +151,7 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
 
             elif ( decoded_msg.startswith( 'Forwarding ' + MSG_RECEIVED + ' from ' ) and len( msg_tokens ) >= 4 ):
                 sender_id = msg_tokens[3]
-                print("Client" + client_id)
-                print("Sender" + sender_id)
                 print( '[client %s] interaction complete: received confirmation from %s' % ( client_id, sender_id ) + '. Ready for next message' )
-
-                if counter == 1:
-                    lettuce_state = True
-                    state = STATE_CLIENT_SEND_COLOUR
 
                 # clear pending message so user can type a new one
                 has_received_confirmation = True
