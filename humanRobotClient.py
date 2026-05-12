@@ -1,18 +1,4 @@
-#!/usr/bin/env python3
-"""
-Combined Interactive Client: merges message-based interaction (waiter sends food, 
-chef responds with green) with vision and robot movement (combinedclient2 functionality).
-
-WAITER role: sends "food", receives "green", then executes combinedclient2 mission
-CHEF role: receives messages, responds with "green"
-
-Usage:
-  WAITER: python CombinedInteractiveClient.py <ID> <TARGET_ID> --waiter
-  CHEF:   python CombinedInteractiveClient.py <ID> <TARGET_ID> --chef
-
-
-  RUN ON BOTH ROBOTS SIMULTANEOUSLY, with matching TARGET_IDs (e.g., "chef1" and "waiter1")
-"""
+# Human Robot Client
 
 import time
 import sys
@@ -30,10 +16,12 @@ MSG_REGISTER = 'REGISTER'
 MSG_COLOUR = 'MESSAGE'
 MSG_RECEIVED = 'MESSAGE_RECEIVED'
 
-HOST = '10.247.72.17'
+#host computer IP address
+#HOST = 'localhost'
+HOST = '10.247.72.18'
 PORT = 50007
 
-# movement gating: robot will not actuate motors unless this is True
+# is robot moving?
 move_enabled = False
 
 # motion parameters
@@ -56,7 +44,7 @@ colour_ranges = {
     }
 }
 
-# define motion functions (guarded by move_enabled)
+# motion function definitions
 def go_forward(tbot):
     if not move_enabled:
         return
@@ -105,7 +93,7 @@ def sharp_left(tbot):
     time.sleep(TURN_TIME)
     tbot.stop()
 
-# underlighting helpers
+# underlighting definitions
 def red_lights(tbot):
     tbot.fill_underlighting((255,0,0))
 
@@ -160,12 +148,11 @@ def stdin_reader(q):
         if line:
             q.put(line)
 
+
+#main if client is chef
 def chef_main(client_id, target_id, tbot, sock):
-    """
-    CHEF mode: receive messages and respond with 'green'
-    """
     global move_enabled
-    print('[%s] Running in CHEF mode (target: %s)' % (client_id, target_id))
+    print('[%s] CHEF (target: %s)' % (client_id, target_id))
     
     recv_buffer = ''
     
@@ -203,21 +190,22 @@ def chef_main(client_id, target_id, tbot, sock):
                     if msg_to == client_id:
                         print('[%s] received from %s: %s' % (client_id, msg_from, msg_colour))
                         
-                        # Chef responds to any message with "green"
-                        reply_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + msg_from + ': green'
-                        try:
-                            sock.sendall((reply_msg + '\n').encode())
-                            print('[%s] sent: green' % client_id)
-                        except Exception as e:
-                            print('[%s] send error: %s' % (client_id, e))
-                            break
-                        
-                        # Also send confirmation
-                        reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
-                        try:
-                            sock.sendall((reply_conf + '\n').encode())
-                        except Exception:
-                            pass
+                        #  if the message is 'food' then chef responds green
+                        if msg_colour == 'food':
+                            reply_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + msg_from + ': green'
+                            try:
+                                sock.sendall((reply_msg + '\n').encode())
+                                print('[%s] sent: green' % client_id)
+                            except Exception as e:
+                                print('[%s] send error: %s' % (client_id, e))
+                                break
+                            
+                            # Also send confirmation
+                            reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
+                            try:
+                                sock.sendall((reply_conf + '\n').encode())
+                            except Exception:
+                                pass
 
             elif server_msg_text.startswith(received_prefix):
                 payload = server_msg_text[len(received_prefix):]
@@ -226,42 +214,41 @@ def chef_main(client_id, target_id, tbot, sock):
                     if msg_to.strip() == client_id:
                         print('[%s] got received confirmation from %s' % (client_id, msg_from))
 
+#main if client is waiter
 def waiter_main(client_id, target_id, tbot, sock, picam2):
-    """
-    WAITER mode: type message, wait for green response, then run combinedclient2 mission
-    """
     global move_enabled
-    print('[%s] Running in WAITER mode (target: %s)' % (client_id, target_id))
-    print('[%s] Type a message (e.g., "food") to send to the chef:' % client_id)
+    print('[%s] WAITER (target: %s)' % (client_id, target_id))
+    print('[%s] Type a message to send to chef:' % client_id)
     
     input_queue = queue.Queue()
     stdin_thread = threading.Thread(target=stdin_reader, args=(input_queue,), daemon=True)
     stdin_thread.start()
     
-    # Phase 1: Wait for user input, send it, and wait for green
-    phase = 1  # 1 = waiting for user input, 2 = running mission
+    # Wait for user input, send it, and wait for green
+    # 1 = waiting for user input, 2 = lookinh for green
+    phase = 1  
     has_sent_message = False
     pending_message = None
     
     recv_buffer = ''
     has_sent_found = False
     
-    mission_state = 10  # STATE_MISSION_LOOKING_FOR_GREEN
+    # STATE_MISSION_LOOKING_FOR_GREEN
+    mission_state = 10  
     green_found_time = 0.0
     red_found_time = 0.0
     green_detection_threshold = 1.0
 
     while True:
-        # Phase 1: Wait for user input and then wait for green
+        #  Wait for user input or wait for green
         if phase == 1:
-            # Check for user input
             if pending_message is None:
                 try:
                     pending_message = input_queue.get_nowait()
                 except queue.Empty:
                     pending_message = None
             
-            # Send user's message once
+            # Send message
             if pending_message is not None and not has_sent_message:
                 msg_to_send = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': ' + pending_message
                 try:
@@ -305,7 +292,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                         msg_to = msg_to_text.strip()
                         msg_content = msg_content.strip().lower()
                         if msg_to == client_id and msg_content == 'green':
-                            print('[%s] *** RECEIVED GREEN - ENABLING MOVEMENT AND STARTING MISSION ***' % client_id)
+                            print('[%s] RECEIVED GREEN' % client_id)
                             move_enabled = True
                             phase = 2
                             mission_state = 10
@@ -325,7 +312,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                         if msg_to.strip() == client_id:
                             print('[%s] got received confirmation from %s' % (client_id, msg_from))
 
-        # Phase 2: Run combinedclient2 mission logic
+        # Phase 2: Run movement colour finding code
         elif phase == 2:
             # capture image and find colours
             img = picam2.capture_array()
@@ -350,7 +337,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
 
             now = time.time()
             
-            # send "found" to target when green is detected (only once per interaction)
+            # send "found" to chef when green is detected
             if detected_colour == 'green' and target_id and not has_sent_found:
                 out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': found'
                 try:
@@ -361,8 +348,8 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                     print('[%s] send error: %s' % (client_id, e))
                     break
 
-            # Control logic based on mission state machine
-            if mission_state == 10:  # LOOKING_FOR_GREEN
+            # LOOKING_FOR_GREEN
+            if mission_state == 10:  
                 if centers.get('green') is not None:
                     green_x = centers.get('green')[0]
                     distance = get_distance(tbot)
@@ -379,10 +366,12 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                 else:
                     sharp_right(tbot)
 
-            elif mission_state == 11:  # FOUND_GREEN
+            # if FOUND_GREEN
+            elif mission_state == 11:  
                 mission_state = 12
 
-            elif mission_state == 12:  # LOOKING_FOR_RED
+            # if LOOKING_FOR_RED
+            elif mission_state == 12:  
                 if centers.get('red') is not None:
                     red_x = centers.get('red')[0]
                     now_check = time.time()
@@ -405,7 +394,8 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                     red_found_time = 0.0
                     sharp_right(tbot)
 
-            elif mission_state == 13:  # RETURN_TO_RED
+            # if RETURN_TO_RED
+            elif mission_state == 13:  
                 if centers.get('red') is not None:
                     red_x = centers.get('red')[0]
                     if red_x < 280:
@@ -424,15 +414,16 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                 if red_found_time == 0.0:
                     red_found_time = now_check
                 if now_check - red_found_time >= 3.0:
-                    print('[%s] Mission complete - at red location' % client_id)
+                    print('[%s] At red location (kitchen)' % client_id)
                     mission_state = 14
                     red_found_time = 0.0
                     move_enabled = False
 
-            elif mission_state == 14:  # WAITING
+            # if WAITING
+            elif mission_state == 14:  
                 tbot.stop()
 
-            # Receive messages during mission
+            # Receive messages
             try:
                 chunk = sock.recv(1024)
             except socket.timeout:
