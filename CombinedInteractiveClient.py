@@ -225,19 +225,20 @@ def chef_main(client_id, target_id, tbot, sock):
 
 def waiter_main(client_id, target_id, tbot, sock, picam2):
     """
-    WAITER mode: send initial message, wait for green response, then run combinedclient2 mission
+    WAITER mode: type message, wait for green response, then run combinedclient2 mission
     """
     global move_enabled
     print('[%s] Running in WAITER mode (target: %s)' % (client_id, target_id))
+    print('[%s] Type a message (e.g., "food") to send to the chef:' % client_id)
     
     input_queue = queue.Queue()
     stdin_thread = threading.Thread(target=stdin_reader, args=(input_queue,), daemon=True)
     stdin_thread.start()
     
-    # Phase 1: Send initial message and wait for green
-    phase = 1  # 1 = waiting for interaction, 2 = running mission
-    has_sent_initial = False
-    has_received_green = False
+    # Phase 1: Wait for user input, send it, and wait for green
+    phase = 1  # 1 = waiting for user input, 2 = running mission
+    has_sent_message = False
+    pending_message = None
     
     recv_buffer = ''
     has_sent_found = False
@@ -248,15 +249,23 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
     green_detection_threshold = 1.0
 
     while True:
-        # Phase 1: Initial interaction loop
+        # Phase 1: Wait for user input and then wait for green
         if phase == 1:
-            # Send initial message once
-            if not has_sent_initial:
-                initial_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': food'
+            # Check for user input
+            if pending_message is None:
                 try:
-                    sock.sendall((initial_msg + '\n').encode())
-                    print('[%s] sent: food' % client_id)
-                    has_sent_initial = True
+                    pending_message = input_queue.get_nowait()
+                except queue.Empty:
+                    pending_message = None
+            
+            # Send user's message once
+            if pending_message is not None and not has_sent_message:
+                msg_to_send = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': ' + pending_message
+                try:
+                    sock.sendall((msg_to_send + '\n').encode())
+                    print('[%s] sent: %s' % (client_id, pending_message))
+                    has_sent_message = True
+                    pending_message = None
                 except Exception as e:
                     print('[%s] send error: %s' % (client_id, e))
                     break
@@ -295,7 +304,6 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                         if msg_to == client_id and msg_content == 'green':
                             print('[%s] *** RECEIVED GREEN - ENABLING MOVEMENT AND STARTING MISSION ***' % client_id)
                             move_enabled = True
-                            has_received_green = True
                             phase = 2
                             mission_state = 10
                             
