@@ -9,6 +9,9 @@ CHEF role: receives messages, responds with "green"
 Usage:
   WAITER: python CombinedInteractiveClient.py <ID> <TARGET_ID> --waiter
   CHEF:   python CombinedInteractiveClient.py <ID> <TARGET_ID> --chef
+
+
+  RUN ON BOTH ROBOTS SIMULTANEOUSLY, with matching TARGET_IDs (e.g., "chef1" and "waiter1")
 """
 
 import time
