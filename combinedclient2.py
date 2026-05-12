@@ -192,6 +192,7 @@ def main():
         recv_buffer = ''
         has_sent_colour = False
         has_received_confirmation = False
+        has_sent_found = False  # Track "found" detection - only sent once per interaction
 
         mission_state = 10  # STATE_MISSION_LOOKING_FOR_GREEN
         green_found_time = 0.0
@@ -222,13 +223,13 @@ def main():
 
             now = time.time()
             
-            # send "found" to target when green is detected
-            if detected_colour == 'green' and target_id and not has_sent_colour:
+            # send "found" to target when green is detected (only once per interaction)
+            if detected_colour == 'green' and target_id and not has_sent_found:
                 out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': found'
                 try:
                     cs.sendall((out_msg + '\n').encode())
                     print('[%s] sent: found' % client_id)
-                    has_sent_colour = True
+                    has_sent_found = True
                     last_send_time = now
                 except Exception as e:
                     print('[%s] send error: %s' % (client_id, e))
