@@ -224,16 +224,14 @@ def main():
                 lights_off(tbot)
 
             now = time.time()
-            if detected_colour and detected_colour != last_sent_colour:
-                has_received_confirmation = False
-
-            # send detected colour to target if appropriate
-            if detected_colour and target_id and (detected_colour != last_sent_colour or now - last_send_time >= min_send_interval):
-                out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': ' + detected_colour
+            
+            # send "found" to target when green is detected
+            if detected_colour == 'green' and target_id and not has_sent_colour:
+                out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': found'
                 try:
                     cs.sendall((out_msg + '\n').encode())
                     print('[combined %s] sent: %s' % (client_id, out_msg))
-                    last_sent_colour = detected_colour
+                    has_sent_colour = True
                     last_send_time = now
                 except Exception as e:
                     print('send error:', e)
