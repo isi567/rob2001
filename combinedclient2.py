@@ -22,7 +22,7 @@ MSG_REGISTER = 'REGISTER'
 MSG_COLOUR = 'MESSAGE'
 MSG_RECEIVED = 'MESSAGE_RECEIVED'
 
-HOST = '10.247.26.138'
+HOST = '10.247.72.17'
 PORT = 50007
 
 # movement gating: robot will not actuate motors unless this is True

@@ -22,7 +22,7 @@ import queue
 # define the IP address of the machine on which the server is running--where you want this client to connect.
 # this could be a dotted quad address or 'localhost' (shorthand for the local machine).
 #HOST = 'localhost'   # or, e.g. '10.5.24.62'
-HOST = '10.247.26.138'
+HOST = '10.247.72.17'
 # define the port for connecting to server.
 # the value needs to match what the server used when it was initialised.
 PORT = 50007
