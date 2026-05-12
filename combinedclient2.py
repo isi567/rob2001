@@ -167,9 +167,7 @@ def main():
     client_id = sys.argv[1]
     target_id = sys.argv[2]
 
-    print('hello!')
-    print('[combined %s] Target: %s' % (client_id, target_id))
-    print('[combined %s] move_enabled will be set when green is received from %s' % (client_id, target_id))
+    print('[%s] Starting (target: %s)' % (client_id, target_id))
     tbot = Trilobot()
 
     picam2 = Picamera2()
@@ -185,6 +183,7 @@ def main():
         cs.connect((HOST, PORT))
         cs.settimeout(0.5)
         cs.sendall((MSG_REGISTER + ' ' + client_id + '\n').encode())
+        print('[%s] Connected to server' % client_id)
 
         state = 2
         last_sent_colour = None
@@ -210,14 +209,12 @@ def main():
             centers = find.find_color_centers(img_bgr, colour_ranges)
             detected_colour = None
             if centers.get('red') is not None:
-                print('Red object at', centers.get('red'))
                 apply_colour_lights(tbot, 'red')
                 detected_colour = 'red'
             else:
                 lights_off(tbot)
 
             if centers.get('green') is not None:
-                print('Green object at', centers.get('green'))
                 apply_colour_lights(tbot, 'green')
                 detected_colour = 'green'
             else:
@@ -230,11 +227,11 @@ def main():
                 out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': found'
                 try:
                     cs.sendall((out_msg + '\n').encode())
-                    print('[combined %s] sent: %s' % (client_id, out_msg))
+                    print('[%s] sent: found' % client_id)
                     has_sent_colour = True
                     last_send_time = now
                 except Exception as e:
-                    print('send error:', e)
+                    print('[%s] send error: %s' % (client_id, e))
                     break
 
             #################################################################
@@ -250,7 +247,6 @@ def main():
                         turn_right(tbot)
                     else:
                         if distance < 15:
-                            print('[combined %s] reached green, moving to FOUND_GREEN' % client_id)
                             tbot.stop()
                             mission_state = 11
                         else:
@@ -259,7 +255,6 @@ def main():
                     sharp_right(tbot)
 
             elif mission_state == 11:  # FOUND_GREEN
-                print('[combined %s] at green, looking for red' % client_id)
                 mission_state = 12
 
             elif mission_state == 12:  # LOOKING_FOR_RED
@@ -269,7 +264,6 @@ def main():
                     if red_found_time == 0.0:
                         red_found_time = now_check
                     if now_check - red_found_time >= green_detection_threshold:
-                        print('[combined %s] found red, moving to RETURN_TO_RED' % client_id)
                         mission_state = 13
                         red_found_time = 0.0
                     else:
@@ -305,7 +299,7 @@ def main():
                 if red_found_time == 0.0:
                     red_found_time = now_check
                 if now_check - red_found_time >= 3.0:
-                    print('[combined %s] at red location, waiting' % client_id)
+                    print('[%s] Mission complete - at red location' % client_id)
                     mission_state = 14
                     red_found_time = 0.0
                     move_enabled = False  # Stop moving when mission complete
@@ -323,7 +317,7 @@ def main():
             if pending_message is not None and not has_sent_colour:
                 client_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': ' + pending_message
                 cs.sendall((client_msg + '\n').encode())
-                print('[combined %s] sent: %s' % (client_id, client_msg))
+                print('[%s] sent: %s' % (client_id, pending_message))
                 has_sent_colour = True
                 has_received_confirmation = False
 
@@ -337,7 +331,7 @@ def main():
                 break
 
             if not chunk:
-                print('server disconnected')
+                print('[%s] Server disconnected' % client_id)
                 break
 
             recv_buffer += chunk.decode()
@@ -348,21 +342,18 @@ def main():
                 server_msg_text = line.strip()
                 if not server_msg_text:
                     continue
-                print('[combined %s] received: %s' % (client_id, server_msg_text))
                 colour_prefix = 'Forwarding ' + MSG_COLOUR + ' from '
                 received_prefix = 'Forwarding ' + MSG_RECEIVED + ' from '
 
                 if server_msg_text.startswith(colour_prefix):
                     payload = server_msg_text[len(colour_prefix):]
-                    print('[combined %s] DEBUG: colour_prefix matched, payload=[%s]' % (client_id, payload))
                     if ' to ' in payload and ':' in payload:
                         msg_from, remainder = payload.split(' to ', 1)
                         msg_to_text, msg_colour = remainder.split(':', 1)
                         msg_to = msg_to_text.strip()
                         msg_colour = msg_colour.strip().lower()
-                        print('[combined %s] DEBUG: msg_from=[%s], msg_to=[%s], msg_colour=[%s]' % (client_id, msg_from, msg_to, msg_colour))
                         if msg_to == client_id:
-                            print('[combined %s] peer %s colour: %s' % (client_id, msg_from, msg_colour))
+                            print('[%s] received from %s: %s' % (client_id, msg_from, msg_colour))
                             apply_colour_lights(tbot, msg_colour)
                             # enable movement only when we receive 'green'
                             if msg_colour == 'green':
@@ -370,16 +361,12 @@ def main():
                                 mission_state = 10  # reset to LOOKING_FOR_GREEN to restart the sequence
                                 green_found_time = 0.0
                                 red_found_time = 0.0
-                                print('[combined %s] *** MOVEMENT ENABLED (green received from %s) - restarting mission ***' % (client_id, msg_from))
+                                print('[%s] *** MOVEMENT ENABLED - mission restart ***' % client_id)
                             else:
                                 move_enabled = False
-                                print('[combined %s] movement disabled (received %s)' % (client_id, msg_colour))
                             # send confirmation back to sender
                             reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
                             cs.sendall((reply_msg + '\n').encode())
-                            print('[combined %s] sent: %s' % (client_id, reply_msg))
-                        else:
-                            print('[combined %s] DEBUG: message not for us (to=%s, client_id=%s)' % (client_id, msg_to, client_id))
                 elif server_msg_text.startswith(received_prefix):
                     payload = server_msg_text[len(received_prefix):]
                     if ' to ' in payload:
@@ -390,9 +377,9 @@ def main():
                             has_sent_colour = False
 
     except KeyboardInterrupt:
-        print('interrupted by user')
+        print('[%s] Interrupted by user' % client_id)
     except Exception as e:
-        print('fatal error:', e)
+        print('[%s] Fatal error: %s' % (client_id, e))
     finally:
         safe_cleanup(tbot, cs, picam2)
 
