@@ -48,7 +48,7 @@ if ( len( sys.argv ) < 3 ):
 client_id = sys.argv[1]
 target_id = sys.argv[2]
 # initial message_text may be provided on the command line; if not, send green automatically.
-initial_message = ' '.join( sys.argv[3:] ).strip() or 'green'
+initial_message = 'green'
 message_text = ''
 input_queue = queue.Queue()
 
