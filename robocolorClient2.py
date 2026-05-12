@@ -47,9 +47,8 @@ if ( len( sys.argv ) < 3 ):
 
 client_id = sys.argv[1]
 target_id = sys.argv[2]
-# initial message_text may be provided on the command line, but by default
-# we'll accept interactive typing after the client has started.
-initial_message = ' '.join( sys.argv[3:] ).strip()
+# initial message_text may be provided on the command line; if not, send green automatically.
+initial_message = ' '.join( sys.argv[3:] ).strip() or 'green'
 message_text = ''
 input_queue = queue.Queue()
 
