@@ -208,20 +208,23 @@ def chef_main(client_id, target_id, tbot, sock):
                                 pass
 
                         if msg_colour == 'bill':
-                            reply_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + msg_from + ': ok, fetching bill'
-                            try:
-                                sock.sendall((reply_msg + '\n').encode())
-                                print('[%s] sent: ok, fetching bill' % client_id)
-                            except Exception as e:
-                                print('[%s] send error: %s' % (client_id, e))
-                                break
+                            phase == 2
+
+                        # if msg_colour == 'bill':
+                        #     reply_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + msg_from + ': bill'
+                        #     try:
+                        #         sock.sendall((reply_msg + '\n').encode())
+                        #         print('[%s] sent: bill' % client_id)
+                        #     except Exception as e:
+                        #         print('[%s] send error: %s' % (client_id, e))
+                        #         break
                             
-                            # Also send confirmation
-                            reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
-                            try:
-                                sock.sendall((reply_conf + '\n').encode())
-                            except Exception:
-                                pass
+                        #     # Also send confirmation
+                        #     reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
+                        #     try:
+                        #         sock.sendall((reply_conf + '\n').encode())
+                        #     except Exception:
+                        #         pass
 
             elif server_msg_text.startswith(received_prefix):
                 payload = server_msg_text[len(received_prefix):]
@@ -234,7 +237,7 @@ def chef_main(client_id, target_id, tbot, sock):
 def waiter_main(client_id, target_id, tbot, sock, picam2):
     global move_enabled
     print('[%s] WAITER (target: %s)' % (client_id, target_id))
-    print('[%s] Type a message to send to chef:' % client_id)
+    print('[%s] Type a message to your waiter:' % client_id)
     
     input_queue = queue.Queue()
     stdin_thread = threading.Thread(target=stdin_reader, args=(input_queue,), daemon=True)
@@ -307,8 +310,10 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                         msg_to_text, msg_content = remainder.split(':', 1)
                         msg_to = msg_to_text.strip()
                         msg_content = msg_content.strip().lower()
-                        if msg_to == client_id and msg_content == 'green':
-                            print('[%s] RECEIVED GREEN' % client_id)
+                        if msg_to == client_id and (msg_content == 'green' or msg_content == 'bill' or msg_content == 'sauce'):
+                            #puts into go phase (2)
+                            print('message content: '+ msg_content)
+                            print('[%s] RECEIVED GO' % client_id)
                             move_enabled = True
                             phase = 2
                             mission_state = 10
