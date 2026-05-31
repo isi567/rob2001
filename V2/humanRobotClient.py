@@ -207,6 +207,9 @@ def chef_main(client_id, target_id, tbot, sock):
                             except Exception:
                                 pass
 
+                        if msg_colour == 'bill':
+                            phase == 2
+
                         # if msg_colour == 'bill':
                         #     reply_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + msg_from + ': bill'
                         #     try:
@@ -307,7 +310,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                         msg_to_text, msg_content = remainder.split(':', 1)
                         msg_to = msg_to_text.strip()
                         msg_content = msg_content.strip().lower()
-                        if msg_to == client_id and msg_content == 'green' or msg_content == 'bill' or msg_content == 'sauce':
+                        if msg_to == client_id and (msg_content == 'green' or msg_content == 'bill' or msg_content == 'sauce'):
                             #puts into go phase (2)
                             print('message content: '+ msg_content)
                             print('[%s] RECEIVED GO' % client_id)
