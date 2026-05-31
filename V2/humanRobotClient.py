@@ -208,23 +208,25 @@ def chef_main(client_id, target_id, tbot, sock):
                                 pass
 
                         if msg_colour == 'bill':
-                            phase == 2
+                            print("Ok, fetching bill")
+                            phase = 2
+                            #activate movement loop
+                            reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
+                            try:
+                                sock.sendall((reply_conf + '\n').encode())
+                            except Exception:
+                                pass
+                        
+                        if msg_colour == 'sauce':
+                            print("Getting some sauce from the kitchen")
+                            phase = 2
+                            #activate movement loop
+                            reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
+                            try:
+                                sock.sendall((reply_conf + '\n').encode())
+                            except Exception:
+                                pass
 
-                        # if msg_colour == 'bill':
-                        #     reply_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + msg_from + ': bill'
-                        #     try:
-                        #         sock.sendall((reply_msg + '\n').encode())
-                        #         print('[%s] sent: bill' % client_id)
-                        #     except Exception as e:
-                        #         print('[%s] send error: %s' % (client_id, e))
-                        #         break
-                            
-                        #     # Also send confirmation
-                        #     reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
-                        #     try:
-                        #         sock.sendall((reply_conf + '\n').encode())
-                        #     except Exception:
-                        #         pass
 
             elif server_msg_text.startswith(received_prefix):
                 payload = server_msg_text[len(received_prefix):]
@@ -487,8 +489,8 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
 
 def main():
     if len(sys.argv) < 4:
-        print('usage: python CombinedInteractiveClient.py <ID> <TARGET_ID> --waiter')
-        print('       python CombinedInteractiveClient.py <ID> <TARGET_ID> --chef')
+        print('if you want to be a waiter WAITER CHEF --waiter')
+        print('if you want to be a chef CHEF WAITER --chef')
         sys.exit(1)
 
     client_id = sys.argv[1]

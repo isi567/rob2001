@@ -139,7 +139,19 @@ def chef_main(client_id, target_id, tbot, sock):
                                 pass
 
                         if msg_colour == 'bill':
-                            # Acknowledge receipt only; do not send a colour reply.
+                            print("Ok, fetching bill")
+                            phase = 2
+                            #activate movement loop
+                            reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
+                            try:
+                                sock.sendall((reply_conf + '\n').encode())
+                            except Exception:
+                                pass
+                        
+                        if msg_colour == 'sauce':
+                            print("Getting some sauce from the kitchen")
+                            phase = 2
+                            #activate movement loop
                             reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
                             try:
                                 sock.sendall((reply_conf + '\n').encode())
@@ -230,8 +242,10 @@ def waiter_main(client_id, target_id, tbot, sock):
                         msg_to_text, msg_content = remainder.split(':', 1)
                         msg_to = msg_to_text.strip()
                         msg_content = msg_content.strip().lower()
-                        if msg_to == client_id and msg_content == 'green':
-                            print('[%s] RECEIVED GREEN' % client_id)
+                        if msg_to == client_id and (msg_content == 'green' or msg_content == 'bill' or msg_content == 'sauce'):
+                            #puts into go phase (2)
+                            print('message content: '+ msg_content)
+                            print('[%s] RECEIVED GO' % client_id)
                             move_enabled = True
                             print("____________________MOVING______________________")
                             phase = 2
