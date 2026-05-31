@@ -20,7 +20,7 @@ import threading
 # define the IP address of the machine on which the server is running.
 # this could be a dotted quad address or 'localhost' (shorthand for the local machine).
 #HOST = 'localhost'   # or, e.g. '10.5.24.62'
-HOST = '10.247.72.18'
+HOST = '10.247.26.135'
 
 # define the port for clients to connect to this socket.
 # the value could be almost anything--that isn't already in use.

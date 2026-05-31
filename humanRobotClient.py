@@ -18,7 +18,7 @@ MSG_RECEIVED = 'MESSAGE_RECEIVED'
 
 #host computer IP address
 #HOST = 'localhost'
-HOST = '10.247.72.18'
+HOST = '10.247.26.135'
 PORT = 50007
 
 # is robot moving?
