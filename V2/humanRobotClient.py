@@ -207,21 +207,21 @@ def chef_main(client_id, target_id, tbot, sock):
                             except Exception:
                                 pass
 
-                        if msg_colour == 'bill':
-                            reply_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + msg_from + ': bill'
-                            try:
-                                sock.sendall((reply_msg + '\n').encode())
-                                print('[%s] sent: bill' % client_id)
-                            except Exception as e:
-                                print('[%s] send error: %s' % (client_id, e))
-                                break
+                        # if msg_colour == 'bill':
+                        #     reply_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + msg_from + ': bill'
+                        #     try:
+                        #         sock.sendall((reply_msg + '\n').encode())
+                        #         print('[%s] sent: bill' % client_id)
+                        #     except Exception as e:
+                        #         print('[%s] send error: %s' % (client_id, e))
+                        #         break
                             
-                            # Also send confirmation
-                            reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
-                            try:
-                                sock.sendall((reply_conf + '\n').encode())
-                            except Exception:
-                                pass
+                        #     # Also send confirmation
+                        #     reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
+                        #     try:
+                        #         sock.sendall((reply_conf + '\n').encode())
+                        #     except Exception:
+                        #         pass
 
             elif server_msg_text.startswith(received_prefix):
                 payload = server_msg_text[len(received_prefix):]
@@ -309,6 +309,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                         msg_content = msg_content.strip().lower()
                         if msg_to == client_id and msg_content == 'green' or msg_content == 'bill' or msg_content == 'sauce':
                             #puts into go phase (2)
+                            print('message content: '+ msg_content)
                             print('[%s] RECEIVED GO' % client_id)
                             move_enabled = True
                             phase = 2
