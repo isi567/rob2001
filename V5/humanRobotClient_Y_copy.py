@@ -5,6 +5,11 @@ import sys
 import socket
 import threading
 import queue
+import numpy as np
+import cv2
+from trilobot import Trilobot
+from picamera2 import Picamera2
+import find
 
 # network protocol constants
 MSG_REGISTER = 'REGISTER'
@@ -12,7 +17,7 @@ MSG_COLOUR = 'MESSAGE'
 MSG_RECEIVED = 'MESSAGE_RECEIVED'
 
 #host computer IP address
-#HOST = 'localhost'
+HOST = 'localhost'
 HOST = '10.247.26.135'
 PORT = 50007
 
@@ -25,42 +30,105 @@ DRIVE_TIME  = 1.2
 TURN_SPEED  = 0.6
 TURN_TIME   = 0.6
 
-# motion function definitions
+# colour thresholds (HSV)
+colour_ranges = {
+    'red': {
+        'lower': np.array([0, 120, 120]),
+        'upper': np.array([10, 255, 255]),
+        'draw_colour': (0, 0, 255)
+    },
+    'green': {
+        'lower': np.array([50, 80, 80]),
+        'upper': np.array([70, 255, 255]),
+        'draw_colour': (0, 255, 0)
+    }
+}
+
 def go_forward(tbot):
-    return
+    if not move_enabled:
+        return
+    print('moving forward')
+    tbot.forward(DRIVE_SPEED)
+    time.sleep(DRIVE_TIME)
+    tbot.stop()
 
 def go_backward(tbot):
-    return
+    if not move_enabled:
+        return
+    print('moving backward')
+    tbot.backward(DRIVE_SPEED)
+    time.sleep(DRIVE_TIME)
+    tbot.stop()
 
 def turn_left(tbot):
-    return
+    if not move_enabled:
+        return
+    print('turning left')
+    tbot.curve_forward_left(TURN_SPEED)
+    time.sleep(TURN_TIME)
+    tbot.stop()
 
 def turn_right(tbot):
-    return
+    if not move_enabled:
+        return
+    print('turning right')
+    tbot.curve_forward_right(TURN_SPEED)
+    time.sleep(TURN_TIME)
+    tbot.stop()
 
 def sharp_right(tbot):
-    return
+    if not move_enabled:
+        return
+    print('sharp right')
+    tbot.turn_right(TURN_SPEED)
+    time.sleep(TURN_TIME)
+    tbot.stop()
 
 def sharp_left(tbot):
-    return
+    if not move_enabled:
+        return
+    print('sharp left')
+    tbot.turn_left(TURN_SPEED)
+    time.sleep(TURN_TIME)
+    tbot.stop()
 
 # underlighting definitions
 def red_lights(tbot):
-    return
+    tbot.fill_underlighting((255,0,0))
 
 def green_lights(tbot):
-    return
+    tbot.fill_underlighting((0,255,0))
 
 def lights_off(tbot):
-    return
+    tbot.clear_underlighting()
 
 def apply_colour_lights(tbot, colour):
-    return
+    if colour == 'red':
+        red_lights(tbot)
+    elif colour == 'green':
+        green_lights(tbot)
+    else:
+        lights_off(tbot)
 
 def get_distance(tbot):
-    return 9999
+    return tbot.read_distance()
 
-def safe_cleanup(tbot=None, sock=None):
+def safe_cleanup(tbot=None, sock=None, camera=None):
+    try:
+        if tbot is not None:
+            tbot.stop()
+    except Exception:
+        pass
+    try:
+        if tbot is not None:
+            tbot.clear_underlighting()
+    except Exception:
+        pass
+    try:
+        if camera is not None:
+            camera.stop()
+    except Exception:
+        pass
     try:
         if sock is not None:
             sock.close()
@@ -139,7 +207,17 @@ def chef_main(client_id, target_id, tbot, sock):
                                 pass
 
                         if msg_colour == 'bill':
-                            # Acknowledge receipt only; do not send a colour reply.
+                            phase = 2
+                            #activate movement loop
+                            reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
+                            try:
+                                sock.sendall((reply_conf + '\n').encode())
+                            except Exception:
+                                pass
+                        
+                        if msg_colour == 'sauce':
+                            phase = 2
+                            #activate movement loop
                             reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
                             try:
                                 sock.sendall((reply_conf + '\n').encode())
@@ -154,10 +232,10 @@ def chef_main(client_id, target_id, tbot, sock):
                         print('[%s] got received confirmation from %s' % (client_id, msg_from))
 
 #main if client is waiter
-def waiter_main(client_id, target_id, tbot, sock):
+def waiter_main(client_id, target_id, tbot, sock, picam2):
     global move_enabled
     print('[%s] WAITER (target: %s)' % (client_id, target_id))
-    print('[%s] Type a message to send:' % client_id)
+    print('[%s] Type a message to send to chef:' % client_id)
     
     input_queue = queue.Queue()
     stdin_thread = threading.Thread(target=stdin_reader, args=(input_queue,), daemon=True)
@@ -172,6 +250,12 @@ def waiter_main(client_id, target_id, tbot, sock):
     
     recv_buffer = ''
     has_sent_found = False
+
+    # STATE_MISSION_LOOKING_FOR_GREEN
+    mission_state = 10  
+    green_found_time = 0.0
+    red_found_time = 0.0
+    green_detection_threshold = 1.0
 
     while True:
         #  Wait for user input or wait for green
@@ -230,8 +314,10 @@ def waiter_main(client_id, target_id, tbot, sock):
                         msg_to_text, msg_content = remainder.split(':', 1)
                         msg_to = msg_to_text.strip()
                         msg_content = msg_content.strip().lower()
-                        if msg_to == client_id and msg_content == 'green':
-                            print('[%s] RECEIVED GREEN' % client_id)
+                        if msg_to == client_id and (msg_content == 'green' or msg_content == 'bill' or msg_content == 'sauce'):
+                            #puts into go phase (2)
+                            print('message content: '+ msg_content)
+                            print('[%s] RECEIVED GO' % client_id)
                             move_enabled = True
                             print("____________________MOVING______________________")
                             phase = 2
@@ -256,15 +342,122 @@ def waiter_main(client_id, target_id, tbot, sock):
                             # from the target, consider the action complete and allow sending again.
                             if last_sent_text is not None and msg_from.strip() == target_id:
                                 if last_sent_text == 'bill':
-                                    print('[%s] ok, fetching bill' % client_id)
-                                else:
-                                    print('[%s] action complete: %s' % (client_id, last_sent_text))
+                                    print('[%s] Ok, fetching bill' % client_id)
+                                elif last_sent_text == 'sauce':
+                                    print('[%s] Ok, fetching sauce' % client_id)
                                 has_sent_message = False
                                 last_sent_text = None
 
-        # Phase 2: camera-free idle mode for testing
+        # Phase 2: Run movement colour finding code
         elif phase == 2:
-            time.sleep(0.05)
+            # capture image and find colours
+            img = picam2.capture_array()
+            try:
+                img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            except Exception:
+                img_bgr = img
+
+            centers = find.find_color_centers(img_bgr, colour_ranges)
+            detected_colour = None
+            if centers.get('red') is not None:
+                apply_colour_lights(tbot, 'red')
+                detected_colour = 'red'
+            else:
+                lights_off(tbot)
+
+            if centers.get('green') is not None:
+                apply_colour_lights(tbot, 'green')
+                detected_colour = 'green'
+            else:
+                lights_off(tbot)
+
+            now = time.time()
+
+            # send "found" to chef when green is detected
+            if detected_colour == 'green' and target_id and not has_sent_found:
+                out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': found'
+                try:
+                    sock.sendall((out_msg + '\n').encode())
+                    print('[%s] sent: found' % client_id)
+                    has_sent_found = True
+                except Exception as e:
+                    print('[%s] send error: %s' % (client_id, e))
+                    break
+
+            # LOOKING_FOR_GREEN
+            if mission_state == 10:
+                if centers.get('green') is not None:
+                    green_x = centers.get('green')[0]
+                    distance = get_distance(tbot)
+                    if green_x < 280:
+                        turn_left(tbot)
+                    elif green_x > 360:
+                        turn_right(tbot)
+                    else:
+                        if distance < 15:
+                            tbot.stop()
+                            mission_state = 11
+                        else:
+                            go_forward(tbot)
+                else:
+                    sharp_right(tbot)
+
+            # if FOUND_GREEN
+            elif mission_state == 11:
+                mission_state = 12
+
+            # if LOOKING_FOR_RED
+            elif mission_state == 12:
+                if centers.get('red') is not None:
+                    red_x = centers.get('red')[0]
+                    now_check = time.time()
+                    if red_found_time == 0.0:
+                        red_found_time = now_check
+                    if now_check - red_found_time >= green_detection_threshold:
+                        mission_state = 13
+                        red_found_time = 0.0
+                    else:
+                        if red_x < 280:
+                            turn_left(tbot)
+                        elif red_x > 360:
+                            turn_right(tbot)
+                        else:
+                            if get_distance(tbot) < 10:
+                                go_backward(tbot)
+                            else:
+                                go_forward(tbot)
+                else:
+                    red_found_time = 0.0
+                    sharp_right(tbot)
+
+            # if RETURN_TO_RED
+            elif mission_state == 13:
+                if centers.get('red') is not None:
+                    red_x = centers.get('red')[0]
+                    if red_x < 280:
+                        turn_left(tbot)
+                    elif red_x > 360:
+                        turn_right(tbot)
+                    else:
+                        if get_distance(tbot) < 10:
+                            go_backward(tbot)
+                        else:
+                            go_forward(tbot)
+                else:
+                    sharp_right(tbot)
+
+                now_check = time.time()
+                if red_found_time == 0.0:
+                    red_found_time = now_check
+                if now_check - red_found_time >= 3.0:
+                    print('[%s] At red location (kitchen)' % client_id)
+                    mission_state = 14
+                    red_found_time = 0.0
+                    move_enabled = False
+
+            # if WAITING
+            elif mission_state == 14:
+                tbot.stop()
 
             # Receive messages
             try:
@@ -323,9 +516,10 @@ def main():
 
     print('[%s] Starting (%s mode, target: %s)' % (client_id, role, target_id))
     
-    tbot = None
+    tbot = Trilobot()
     
     cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    picam2 = None
     try:
         cs.connect((HOST, PORT))
         cs.settimeout(0.5)
@@ -333,7 +527,10 @@ def main():
         print('[%s] Connected to server' % client_id)
 
         if role == '--waiter':
-            waiter_main(client_id, target_id, tbot, cs)
+            picam2 = Picamera2()
+            picam2.configure(picam2.create_preview_configuration(main={"size": (640, 480)}))
+            picam2.start()
+            waiter_main(client_id, target_id, tbot, cs, picam2)
         else:  # chef
             chef_main(client_id, target_id, tbot, cs)
 
@@ -342,7 +539,7 @@ def main():
     except Exception as e:
         print('[%s] Fatal error: %s' % (client_id, e))
     finally:
-        safe_cleanup(tbot, cs)
+        safe_cleanup(tbot, cs, picam2)
 
 if __name__ == '__main__':
     main()

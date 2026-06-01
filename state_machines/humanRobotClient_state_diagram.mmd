@@ -1,0 +1,36 @@
+stateDiagram-v2
+    [*] --> WaitingForInput
+
+    state "Phase 1: Waiting for input" as WaitingForInput
+    state "Phase 2: Active mission" as ActiveMission
+
+    WaitingForInput --> ActiveMission: MSG_COLOUR green / bill / sauce
+
+    state ActiveMission {
+        [*] --> LookingForGreen
+        state "10: Looking for green" as LookingForGreen
+        state "11: Found green" as FoundGreen
+        state "12: Looking for red" as LookingForRed
+        state "13: Return to red" as ReturnToRed
+        state "14: Waiting" as Waiting
+
+        LookingForGreen --> FoundGreen: green centered and distance < 15
+        FoundGreen --> LookingForRed: immediate
+        LookingForRed --> ReturnToRed: red detected steady
+        ReturnToRed --> Waiting: at red location for 3 s
+        Waiting --> Waiting: tbot.stop
+
+        LookingForGreen --> LookingForGreen: green off-center or not found
+        LookingForRed --> LookingForRed: red off-center or not found
+        ReturnToRed --> ReturnToRed: keep moving toward red
+    }
+
+    state "Chef sends green after food" as ChefReply
+    state "Waiter sends found" as WaiterReply
+    state "Confirmation messages" as Confirmation
+
+    ChefReply --> WaiterReply
+    WaiterReply --> Confirmation
+    Confirmation --> Confirmation
+
+
