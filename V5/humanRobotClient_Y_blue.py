@@ -397,12 +397,21 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
             if centers.get('red') is not None:
                 apply_colour_lights(tbot, 'red')
                 detected_colour = 'red'
+                print("Red Detected")
             else:
                 lights_off(tbot)
 
             if centers.get('green') is not None:
                 apply_colour_lights(tbot, 'green')
                 detected_colour = 'green'
+                print("Green Detected")
+            else:
+                lights_off(tbot)
+
+            if centers.get('blue') is not None:
+                apply_colour_lights(tbot, 'blue')
+                detected_colour = 'blue'
+                print("Blue Detected")
             else:
                 lights_off(tbot)
 
@@ -421,6 +430,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
 
             # LOOKING_FOR_GREEN
             if mission_state == 10:
+                print("Looking for green")
                 if centers.get('green') is not None:
                     green_x = centers.get('green')[0]
                     distance = get_distance(tbot)
@@ -439,6 +449,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
 
              # if LOOKING_FOR_BLUE
             elif mission_state == 15:  
+                print("Looking for blue")
                 if centers.get('blue') is not None:
                     blue_x = centers.get('blue')[0]
                     now_check = time.time()
@@ -464,6 +475,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
 
             # if RETURN_TO_BLUE
             elif mission_state == 16:  
+                print("going to blue")
                 if centers.get('blue') is not None:
                     blue_x = centers.get('blue')[0]
                     if blue_x < 280:
@@ -494,6 +506,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
 
             # if LOOKING_FOR_RED
             elif mission_state == 12:
+                print("Looking for red")
                 if centers.get('red') is not None:
                     red_x = centers.get('red')[0]
                     now_check = time.time()
@@ -518,6 +531,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
 
             # if RETURN_TO_RED
             elif mission_state == 13:
+                print("going to red")
                 if centers.get('red') is not None:
                     red_x = centers.get('red')[0]
                     if red_x < 280:
@@ -547,6 +561,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
 
             # if WAITING
             elif mission_state == 14:
+                print("Stopping")
                 tbot.stop()
 
             # if bill or sauce, find red and then find blue
