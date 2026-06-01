@@ -279,6 +279,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
     mission_state = 10  
     green_found_time = 0.0
     red_found_time = 0.0
+    blue_found_time = 0.0
     green_detection_threshold = 1.0
 
     # going to kitchen 
