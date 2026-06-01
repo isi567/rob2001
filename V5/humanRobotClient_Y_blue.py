@@ -555,6 +555,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                     # if looking for bill or sauce, it needs to look for blue instead of red next, so set state accordingly
                     if last_sent_text in ('bill', 'sauce'):
                          mission_state = 15
+                    
                     else:
                         mission_state = 14
                     red_found_time = 0.0
@@ -564,6 +565,12 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
             elif mission_state == 14:
                 print("Stopping")
                 tbot.stop()
+                move_enabled = False
+                has_sent_message = False
+                has_sent_found = False
+                last_sent_text = None
+                phase = 1
+                pending_message = None
 
             # if bill or sauce, find red and then find blue
             elif mission_state == 17:
