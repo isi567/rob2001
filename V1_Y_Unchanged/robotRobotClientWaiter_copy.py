@@ -49,41 +49,6 @@ def send_to_chef(msg, from_id=None, to_id=None):
             pass
     print(out_msg)
 
-
-def handle_chef_message(tbot, message_text):
-    """React to chef status and ingredient messages differently."""
-    normalized = message_text.strip().lower()
-
-    if normalized.startswith('asking for '):
-        ingredient = normalized[len('asking for '):].strip()
-        send_to_chef('chef status: asking for %s' % ingredient)
-        return
-
-    if normalized == 'green':
-        send_to_chef('chef ingredient: green')
-        apply_colour_lights(tbot, 'green')
-        return
-
-    if normalized == 'tomato':
-        send_to_chef('chef ingredient: tomato')
-        apply_colour_lights(tbot, 'red')
-        return
-
-    if normalized == 'cucumber':
-        send_to_chef('chef ingredient: cucumber')
-        apply_colour_lights(tbot, 'green')
-        return
-
-    if normalized == 'saying food made':
-        send_to_chef('chef status: food made')
-        return
-
-    if normalized == 'food made':
-        send_to_chef('chef action: food made')
-        return
-
-    send_to_chef('chef message: %s' % normalized)
-
 # movement gating: robot will not actuate motors unless this is True
 move_enabled = False
 
@@ -423,7 +388,7 @@ def main():
                         msg_colour = msg_colour.strip().lower()
                         if msg_to == client_id:
                             print('received from %s: %s' % (msg_from, msg_colour))
-                            handle_chef_message(tbot, msg_colour)
+                            apply_colour_lights(tbot, msg_colour)
                             # enable movement only when we receive 'green'
                             if msg_colour == 'green':
                                 move_enabled = True

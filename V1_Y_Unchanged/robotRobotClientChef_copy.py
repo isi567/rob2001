@@ -49,16 +49,8 @@ client_id = sys.argv[1]
 target_id = sys.argv[2]
 
 # scripted chef -> waiter messages, sent in order after each confirmation.
-scripted_messages = [
-    'asking for green',
-    'green',
-    'asking for tomato',
-    'tomato',
-    'asking for cucumber',
-    'cucumber',
-    'saying food made',
-    'food made',
-]
+scripted_messages = [ 'green', 'tomato', 'cucumber', 'food made' ]
+initial_message = scripted_messages.pop( 0 )
 message_text = ''
 input_queue = queue.Queue()
 
@@ -96,9 +88,10 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
     # start stdin reader thread to accept interactive typing after startup
     stdin_thread = threading.Thread(target=stdin_reader, args=(input_queue,), daemon=True)
     stdin_thread.start()
-    # queue the whole scripted sequence so each confirmation unlocks the next step
-    for scripted_message in scripted_messages:
-        input_queue.put( scripted_message )
+    # if an initial message was provided on the command line, queue it once
+    if initial_message:
+        input_queue.put(initial_message)
+        initial_message = ''
     pending_message = None
     counter = 0
     while( True ):
@@ -167,6 +160,9 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
                 message_text = ''
                 has_sent_colour = False
                 has_received_confirmation = False
+
+                if scripted_messages:
+                    input_queue.put( scripted_messages.pop( 0 ) )
             
         elif ( state == STATE_CLIENT_EXITING ):
             break;
