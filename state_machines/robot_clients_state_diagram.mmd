@@ -1,0 +1,42 @@
+stateDiagram-v2
+    [*] --> WaiterIdle
+
+    state "Waiter client" as WaiterClient {
+        [*] --> WaiterIdle
+        state "Waiting for input" as WaiterIdle
+        state "Mission 10: Looking for green" as Waiter10
+        state "Mission 11: Found green" as Waiter11
+        state "Mission 12: Looking for red" as Waiter12
+        state "Mission 13: Return to red" as Waiter13
+        state "Mission 14: Waiting" as Waiter14
+
+        WaiterIdle --> Waiter10: incoming green / bill / sauce
+        Waiter10 --> Waiter11: green centered and close
+        Waiter11 --> Waiter12: immediate
+        Waiter12 --> Waiter13: red stable
+        Waiter13 --> Waiter14: at red location for 3 s
+        Waiter14 --> Waiter14: stop
+
+        Waiter10 --> Waiter10: adjust toward green
+        Waiter12 --> Waiter12: adjust toward red
+        Waiter13 --> Waiter13: keep moving toward red
+    }
+
+    state "Chef client" as ChefClient {
+        [*] --> ChefRunning
+        state "Running / receiving" as ChefRunning
+        state "Send green reply" as ChefSendGreen
+        state "Send confirmation" as ChefConfirm
+
+        ChefRunning --> ChefSendGreen: incoming food
+        ChefSendGreen --> ChefConfirm: send MESSAGE green
+        ChefConfirm --> ChefRunning: send MESSAGE_RECEIVED
+
+        ChefRunning --> ChefRunning: incoming bill or other
+    }
+
+    Waiter10 --> ChefRunning: send MESSAGE found
+    WaiterIdle --> ChefRunning: send MESSAGE food or other
+    ChefConfirm --> WaiterIdle: server forwards MESSAGE green
+    ChefRunning --> Waiter10: waiter receives green reply
+    ChefRunning --> WaiterIdle: confirmations
