@@ -41,6 +41,11 @@ colour_ranges = {
         'lower': np.array([50, 80, 80]),
         'upper': np.array([70, 255, 255]),
         'draw_colour': (0, 255, 0)
+    },
+    'blue': {
+        'lower': np.array([100, 80, 80]),
+        'upper': np.array([130, 255, 255]),
+        'draw_colour': (255, 0, 0)
     }
 }
 
@@ -100,6 +105,9 @@ def red_lights(tbot):
 def green_lights(tbot):
     tbot.fill_underlighting((0,255,0))
 
+def blue_lights(tbot):
+    tbot.fill_underlighting((0,0,255))
+
 def lights_off(tbot):
     tbot.clear_underlighting()
 
@@ -108,6 +116,8 @@ def apply_colour_lights(tbot, colour):
         red_lights(tbot)
     elif colour == 'green':
         green_lights(tbot)
+    elif colour == 'blue':
+        blue_lights(tbot)
     else:
         lights_off(tbot)
 
@@ -358,6 +368,12 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
             else:
                 lights_off(tbot)
 
+            if centers.get('blue') is not None:
+                apply_colour_lights(tbot, 'blue')
+                detected_colour = 'blue'
+            else:
+                lights_off(tbot)
+
             now = time.time()
             
             # send "found" to chef when green is detected
@@ -438,6 +454,55 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                     red_found_time = now_check
                 if now_check - red_found_time >= 3.0:
                     print('[%s] At red location (kitchen)' % client_id)
+                    mission_state = 14
+                    red_found_time = 0.0
+                    move_enabled = False
+
+             # if LOOKING_FOR_BLUE
+            elif mission_state == 15:  
+                if centers.get('blue') is not None:
+                    blue_x = centers.get('blue')[0]
+                    now_check = time.time()
+                    if blue_found_time == 0.0:
+                        blue_found_time = now_check
+                    if now_check - blue_found_time >= green_detection_threshold:
+                        mission_state = 16
+                        red_found_time = 0.0
+                    else:
+                        if blue_x < 280:
+                            turn_left(tbot)
+                        elif blue_x > 360:
+                            turn_right(tbot)
+                        else:
+                            if get_distance(tbot) < 10:
+                                go_backward(tbot)
+                            else:
+                                go_forward(tbot)
+                else:
+                    blue_found_time = 0.0
+                    sharp_right(tbot)
+
+            # if RETURN_TO_BLUE
+            elif mission_state == 16:  
+                if centers.get('blue') is not None:
+                    blue_x = centers.get('blue')[0]
+                    if blue_x < 280:
+                        turn_left(tbot)
+                    elif blue_x > 360:
+                        turn_right(tbot)
+                    else:
+                        if get_distance(tbot) < 10:
+                            go_backward(tbot)
+                        else:
+                            go_forward(tbot)
+                else:
+                    sharp_right(tbot)
+                
+                now_check = time.time()
+                if blue_found_time == 0.0:
+                    blue_found_time = now_check
+                if now_check - blue_found_time >= 3.0:
+                    print('[%s] At blue location (resteraunt)' % client_id)
                     mission_state = 14
                     red_found_time = 0.0
                     move_enabled = False
