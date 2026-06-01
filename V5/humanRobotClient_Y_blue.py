@@ -43,7 +43,7 @@ colour_ranges = {
         'draw_colour': (0, 255, 0)
     },
     'blue': {
-        'lower': np.array([108, 140, 140]),
+        'lower': np.array([100, 110, 110]),
         'upper': np.array([130, 255, 255]),
         'draw_colour': (255, 0, 0)
     }
