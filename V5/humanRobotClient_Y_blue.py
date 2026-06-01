@@ -219,8 +219,14 @@ def chef_main(client_id, target_id, tbot, sock):
                                 pass
 
                         if msg_colour == 'bill':
-                            phase = 2
-                            #activate movement loop
+                            reply_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + msg_from + ': bill'
+                            try:
+                                sock.sendall((reply_msg + '\n').encode())
+                                print('[%s] sent: bill' % client_id)
+                            except Exception as e:
+                                print('[%s] send error: %s' % (client_id, e))
+                                break
+
                             reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
                             try:
                                 sock.sendall((reply_conf + '\n').encode())
@@ -228,8 +234,14 @@ def chef_main(client_id, target_id, tbot, sock):
                                 pass
                         
                         if msg_colour == 'sauce':
-                            phase = 2
-                            #activate movement loop
+                            reply_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + msg_from + ': sauce'
+                            try:
+                                sock.sendall((reply_msg + '\n').encode())
+                                print('[%s] sent: sauce' % client_id)
+                            except Exception as e:
+                                print('[%s] send error: %s' % (client_id, e))
+                                break
+
                             reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
                             try:
                                 sock.sendall((reply_conf + '\n').encode())
