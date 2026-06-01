@@ -226,7 +226,7 @@ def main():
     client_id = sys.argv[1]
     target_id = sys.argv[2]
 
-    print('[%s] Starting (target: %s)' % (client_id, target_id), from_id=client_id, to_id=target_id)
+    #print('[%s] Starting (target: %s)' % (client_id, target_id), from_id=client_id, to_id=target_id)
     tbot = Trilobot()
 
     picam2 = Picamera2()
