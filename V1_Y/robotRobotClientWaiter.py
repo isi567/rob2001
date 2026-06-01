@@ -77,7 +77,7 @@ def go_forward(tbot):
     if not move_enabled:
         send_to_chef('movement disabled; waiting for green')
         return
-    send_to_chef('moving forward')
+    #send_to_chef('moving forward')
     tbot.forward(DRIVE_SPEED)
     time.sleep(DRIVE_TIME)
     tbot.stop()
@@ -86,7 +86,7 @@ def go_backward(tbot):
     if not move_enabled:
         send_to_chef('movement disabled; waiting for green')
         return
-    send_to_chef('moving backward')
+    #send_to_chef('moving backward')
     tbot.backward(DRIVE_SPEED)
     time.sleep(DRIVE_TIME)
     tbot.stop()
@@ -95,7 +95,7 @@ def turn_left(tbot):
     if not move_enabled:
         send_to_chef('movement disabled; waiting for green')
         return
-    send_to_chef('turning left')
+    #send_to_chef('turning left')
     tbot.curve_forward_left(TURN_SPEED)
     time.sleep(TURN_TIME)
     tbot.stop()
@@ -104,7 +104,7 @@ def turn_right(tbot):
     if not move_enabled:
         send_to_chef('movement disabled; waiting for green')
         return
-    send_to_chef('turning right')
+    #send_to_chef('turning right')
     tbot.curve_forward_right(TURN_SPEED)
     time.sleep(TURN_TIME)
     tbot.stop()
@@ -113,7 +113,7 @@ def sharp_right(tbot):
     if not move_enabled:
         send_to_chef('movement disabled; waiting for green')
         return
-    send_to_chef('sharp right')
+    #send_to_chef('sharp right')
     tbot.turn_right(TURN_SPEED)
     time.sleep(TURN_TIME)
     tbot.stop()
@@ -122,7 +122,7 @@ def sharp_left(tbot):
     if not move_enabled:
         send_to_chef('movement disabled; waiting for green')
         return
-    send_to_chef('sharp left')
+    #send_to_chef('sharp left')
     tbot.turn_left(TURN_SPEED)
     time.sleep(TURN_TIME)
     tbot.stop()
@@ -185,13 +185,13 @@ def stdin_reader(q):
 def main():
     global move_enabled
     if len(sys.argv) < 3:
-        send_to_chef('usage: python combinedclient2.py <ID> <TARGET_ID>', from_id='unknown', to_id='chef')
+        print('usage: python combinedclient2.py <ID> <TARGET_ID>', from_id='unknown', to_id='chef')
         sys.exit(1)
 
     client_id = sys.argv[1]
     target_id = sys.argv[2]
 
-    send_to_chef('[%s] Starting (target: %s)' % (client_id, target_id), from_id=client_id, to_id=target_id)
+    print('[%s] Starting (target: %s)' % (client_id, target_id), from_id=client_id, to_id=target_id)
     tbot = Trilobot()
 
     picam2 = Picamera2()
@@ -212,7 +212,7 @@ def main():
         cs_global = cs
         client_id_global = client_id
         chef_id_global = target_id
-        send_to_chef('[%s] Connected to server' % client_id)
+        print('[%s] Connected to server' % client_id)
 
         state = 2
         last_sent_colour = None
@@ -338,7 +338,7 @@ def main():
                     move_enabled = False  # Stop moving when mission complete
 
             elif mission_state == 14:  # WAITING
-                send_to_chef('Stopping')
+                #send_to_chef('Stopping')
                 tbot.stop()
 
             # check for interactive input to send arbitrary messages
@@ -351,7 +351,7 @@ def main():
             if pending_message is not None and not has_sent_colour:
                 client_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': ' + pending_message
                 cs.sendall((client_msg + '\n').encode())
-                send_to_chef('sent: %s' % (pending_message,))
+                print('sent: %s' % (pending_message,))
                 has_sent_colour = True
                 has_received_confirmation = False
 
@@ -365,7 +365,7 @@ def main():
                 break
 
             if not chunk:
-                send_to_chef('Server disconnected')
+                print('Server disconnected')
                 break
 
             recv_buffer += chunk.decode()
@@ -387,7 +387,7 @@ def main():
                         msg_to = msg_to_text.strip()
                         msg_colour = msg_colour.strip().lower()
                         if msg_to == client_id:
-                            send_to_chef('received from %s: %s' % (msg_from, msg_colour))
+                            print('received from %s: %s' % (msg_from, msg_colour))
                             apply_colour_lights(tbot, msg_colour)
                             # enable movement only when we receive 'green'
                             if msg_colour == 'green':
@@ -406,14 +406,14 @@ def main():
                     if ' to ' in payload:
                         msg_from, msg_to = payload.split(' to ', 1)
                         if msg_to.strip() == client_id:
-                            send_to_chef('got received confirmation from %s' % (msg_from,))
+                            print('got received confirmation from %s' % (msg_from,))
                             has_received_confirmation = True
                             has_sent_colour = False
 
     except KeyboardInterrupt:
-        send_to_chef('Interrupted by user', from_id=client_id)
+        print('Interrupted by user', from_id=client_id)
     except Exception as e:
-        send_to_chef('Fatal error: %s' % (e,), from_id=client_id)
+        print('Fatal error: %s' % (e,), from_id=client_id)
     finally:
         safe_cleanup(tbot, cs, picam2)
 
