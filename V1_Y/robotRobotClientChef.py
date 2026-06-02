@@ -50,7 +50,7 @@ target_id = sys.argv[2]
 
 # scripted chef -> waiter messages, sent in order after each confirmation.
 scripted_messages = [
-    
+    'asking for green',
     'green',
     'asking for tomato',
     'tomato',
