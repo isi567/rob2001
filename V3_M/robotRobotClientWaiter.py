@@ -193,6 +193,7 @@ def main():
         has_sent_colour = False
         has_received_confirmation = False
         has_sent_found = False  # Track "found" detection - only sent once per interaction
+        has_notified_waiting = False
 
         mission_state = 10  # STATE_MISSION_LOOKING_FOR_GREEN
         green_found_time = 0.0
@@ -307,6 +308,11 @@ def main():
 
             elif mission_state == 14:  # WAITING
                 tbot.stop()
+                if not has_notified_waiting:
+                    waiting_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + target_id + ': waiting'
+                    cs.sendall((waiting_msg + '\n').encode())
+                    print('[%s] sent: waiting' % client_id)
+                    has_notified_waiting = True
 
             # check for interactive input to send arbitrary messages
             pending_message = None
@@ -362,6 +368,7 @@ def main():
                                 mission_state = 10  # reset to LOOKING_FOR_GREEN to restart the sequence
                                 green_found_time = 0.0
                                 red_found_time = 0.0
+                                has_notified_waiting = False
                                 print('[%s] *** MOVEMENT ENABLED - mission restart ***' % client_id)
                             else:
                                 move_enabled = False
