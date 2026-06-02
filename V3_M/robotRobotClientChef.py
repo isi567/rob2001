@@ -118,7 +118,7 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
                 sender_id = msg_tokens[3]
                 received_payload = ' '.join( msg_tokens[4:] )
 
-                if ( received_payload == 'waiting' ):
+                if ( received_payload.endswith( 'waiting' ) ):
                     print( '[client %s] interaction complete: waiter is waiting again after red. Ready for next message' % ( client_id ))
 
                     # choose the next random action immediately and send it on the next loop iteration
