@@ -271,7 +271,7 @@ def main():
         cs_global = cs
         client_id_global = client_id
         chef_id_global = target_id
-        print('[%s] Connected to server' % client_id)
+        send_to_chef('[%s] Connected to server' % client_id)
 
         state = 2
         last_sent_colour = None
@@ -410,7 +410,7 @@ def main():
             if pending_message is not None and not has_sent_colour:
                 client_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': ' + pending_message
                 cs.sendall((client_msg + '\n').encode())
-                print('sent: %s' % (pending_message,))
+                send_to_chef('sent: %s' % (pending_message,))
                 has_sent_colour = True
                 has_received_confirmation = False
 
@@ -424,7 +424,7 @@ def main():
                 break
 
             if not chunk:
-                print('Server disconnected')
+                send_to_chef('Server disconnected')
                 break
 
             recv_buffer += chunk.decode()
@@ -435,6 +435,8 @@ def main():
                 server_msg_text = line.strip()
                 if not server_msg_text:
                     continue
+                # debug log raw forwarded server line
+                print('RAW_SERVER: %s' % line)
                 colour_prefix = 'Forwarding ' + MSG_COLOUR + ' from '
                 received_prefix = 'Forwarding ' + MSG_RECEIVED + ' from '
 
@@ -469,14 +471,14 @@ def main():
                     if ' to ' in payload:
                         msg_from, msg_to = payload.split(' to ', 1)
                         if msg_to.strip() == client_id:
-                            print('got received confirmation from %s' % (msg_from,))
+                            send_to_chef('got received confirmation from %s' % (msg_from,))
                             has_received_confirmation = True
                             has_sent_colour = False
 
     except KeyboardInterrupt:
-        print('Interrupted by user', from_id=client_id)
+        send_to_chef('Interrupted by user', from_id=client_id)
     except Exception as e:
-        print('Fatal error: %s' % (e,), from_id=client_id)
+        send_to_chef('Fatal error: %s' % (e,), from_id=client_id)
     finally:
         safe_cleanup(tbot, cs, picam2)
 
