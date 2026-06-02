@@ -253,7 +253,7 @@ def main():
                 elif mission_state == 12:
                     send_status(cs, client_id, target_id, 'looking for red')
                 elif mission_state == 13:
-                    send_status(cs, client_id, target_id, 'found red')
+                    send_status(cs, client_id, target_id, 'returning to red')
                 last_reported_state = mission_state
 
             if mission_state == 10:  # LOOKING_FOR_GREEN
@@ -386,6 +386,7 @@ def main():
                             # enable movement only when we receive 'green'
                             if msg_colour == 'green' or 'tomato' or 'cucumber':
                                 move_enabled = True
+                                cs.sendall('movement enabled\n'.encode())
                                 mission_state = 10  # reset to LOOKING_FOR_GREEN to restart the sequence
                                 green_found_time = 0.0
                                 red_found_time = 0.0
