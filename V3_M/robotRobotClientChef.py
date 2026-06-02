@@ -47,34 +47,15 @@ if ( len( sys.argv ) < 3 ):
 
 client_id = sys.argv[1]
 target_id = sys.argv[2]
-# initial message_text may be provided on the command line; if not, send green automatically.
-
 chef_message_list = ['green','tomato','cucumber']
 
-initial_message = random.choice(chef_message_list)
-message_text = ''
-input_queue = queue.Queue()
-
-def stdin_reader(q):
-    # Blocking read from stdin (one line at a time). Runs in a daemon thread.
-    while True:
-        try:
-            line = sys.stdin.readline()
-        except Exception:
-            break
-        if not line:
-            break
-        line = line.strip()
-        if line:
-            q.put(line)
+message_text = random.choice(chef_message_list)
 
 # try to create and open a new socket object (called "cs", for client socket).
 with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
     state = STATE_CLIENT_STARTING
     has_sent_colour = False
     has_received_confirmation = False
-    last_send_time = 0.0
-    send_interval = 1.0
     print( '[client %s] socket created' % ( client_id ))
     # bind the newly created socket object to the server's host and port (defined by the server).
     cs.connect(( HOST, PORT ))
@@ -86,26 +67,9 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
     cs.sendall( (client_msg + '\n').encode() ) # send formatted message to server
     print( '[client %s] sent message: %s' % ( client_id, client_msg ))
     state = STATE_CLIENT_RUNNING
-    # start stdin reader thread to accept interactive typing after startup
-    stdin_thread = threading.Thread(target=stdin_reader, args=(input_queue,), daemon=True)
-    stdin_thread.start()
-    # if an initial message was provided on the command line, queue it once
-    if initial_message:
-        input_queue.put(initial_message)
-        initial_message = ''
-    pending_message = None
-    counter = 0
     while( True ):
         if ( state == STATE_CLIENT_RUNNING ):
-            # check for a new typed message
-            if pending_message is None:
-                try:
-                    pending_message = input_queue.get_nowait()
-                except queue.Empty:
-                    pending_message = None
-            # if we have a pending message that hasn't been sent yet, send it
-            if ( pending_message is not None ) and ( not has_sent_colour ):
-                message_text = pending_message
+            if not has_sent_colour:
                 state = STATE_CLIENT_SEND_COLOUR
             else:
                 state = STATE_CLIENT_RECEIVE_COLOUR
@@ -116,7 +80,6 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
             cs.sendall( (client_msg + '\n').encode() ) # send formatted message to server
             print( '[client %s] sent message: %s' % ( client_id, client_msg ))
             has_sent_colour = True
-            last_send_time = time.time()
             state = STATE_CLIENT_RUNNING
 
         elif ( state == STATE_CLIENT_ERROR ):
@@ -155,12 +118,11 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
                 sender_id = msg_tokens[3]
                 print( '[client %s] interaction complete: received confirmation from %s' % ( client_id, sender_id ) + '. Ready for next message' )
 
-                # queue the next random action for the waiter immediately
+                # choose the next random action immediately and send it on the next loop iteration
                 has_received_confirmation = True
-                pending_message = random.choice(chef_message_list)
-                message_text = ''
                 has_sent_colour = False
                 has_received_confirmation = False
+                message_text = random.choice(chef_message_list)
                 state = STATE_CLIENT_RUNNING
             
         elif ( state == STATE_CLIENT_EXITING ):
