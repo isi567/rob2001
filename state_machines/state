@@ -1,0 +1,60 @@
+---
+references:
+  - "File: /robotRobotClientWaiter.py"
+generationTime: 2026-06-01T20:46:39.033Z
+---
+stateDiagram-v2
+    [*] --> Idle
+    Idle: entry / create Trilobot, Picamera2, socket, stdin thread
+    Idle: exit / send REGISTER and enter control loop
+
+    Idle --> Active : register_ok
+    Active --> [*] : KeyboardInterrupt | fatal_error | server_disconnected
+
+    state Active {
+        [*] --> MissionFlow
+        state MissionFlow {
+            [*] --> LookingForGreen
+            LookingForGreen: entry / mission_state=10
+            LookingForGreen --> LookingForGreen : no_green / sharp_right()
+            LookingForGreen --> LookingForGreen : green_left_or_right / turn_left() or turn_right()
+            LookingForGreen --> FoundGreen : green_centered && distance<15 / stop()
+
+            FoundGreen: entry / mission_state=11
+            FoundGreen --> LookingForRed : advance_to_state_12
+
+            LookingForRed: entry / mission_state=12
+            LookingForRed --> LookingForRed : red_not_stable / align_or_search
+            LookingForRed --> ReturnToRed : red_seen_for>=1s
+
+            ReturnToRed: entry / mission_state=13
+            ReturnToRed --> ReturnToRed : red_visible_or_search / align_or_sharp_right
+            ReturnToRed --> Waiting : red_seen_for>=3s / stop(); move_enabled=False
+
+            Waiting: entry / mission_state=14; stop()
+        }
+
+        --
+        [*] --> CommsFlow
+        state CommsFlow {
+            [*] --> MovementDisabled
+            MovementDisabled: entry / move_enabled=False
+            MovementDisabled --> MovementEnabled : recv MESSAGE green / reset mission timers
+            MovementEnabled: entry / move_enabled=True
+            MovementEnabled --> MovementDisabled : recv MESSAGE non_green
+
+            MovementEnabled --> FoundSent : detect_green && !has_sent_found / send "found"
+            FoundSent: entry / has_sent_found=True
+            FoundSent --> MovementEnabled : interaction_reset
+        }
+
+        --
+        [*] --> AckFlow
+        state AckFlow {
+            [*] --> ReadyToSend
+            ReadyToSend --> AwaitingConfirmation : stdin_message / send MESSAGE
+            AwaitingConfirmation --> ReadyToSend : recv MESSAGE_RECEIVED
+        }
+    }
+
+    note right of LookingForRed : Red must remain detected for 1s before switching to ReturnToRed
