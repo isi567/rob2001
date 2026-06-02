@@ -116,14 +116,17 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
 
             elif ( decoded_msg.startswith( 'Forwarding ' + MSG_RECEIVED + ' from ' ) and len( msg_tokens ) >= 4 ):
                 sender_id = msg_tokens[3]
-                print( '[client %s] interaction complete: received confirmation from %s' % ( client_id, sender_id ) + '. Ready for next message' )
+                received_payload = ' '.join( msg_tokens[4:] )
 
-                # choose the next random action immediately and send it on the next loop iteration
-                has_received_confirmation = True
-                has_sent_colour = False
-                has_received_confirmation = False
-                message_text = random.choice(chef_message_list)
-                state = STATE_CLIENT_SEND_COLOUR
+                if ( received_payload == 'waiting' ):
+                    print( '[client %s] interaction complete: waiter is waiting again after red. Ready for next message' % ( client_id ))
+
+                    # choose the next random action immediately and send it on the next loop iteration
+                    has_received_confirmation = True
+                    has_sent_colour = False
+                    has_received_confirmation = False
+                    message_text = random.choice(chef_message_list)
+                    state = STATE_CLIENT_SEND_COLOUR
             
         elif ( state == STATE_CLIENT_EXITING ):
             break;
