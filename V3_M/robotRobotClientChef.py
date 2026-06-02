@@ -123,7 +123,7 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
                 has_sent_colour = False
                 has_received_confirmation = False
                 message_text = random.choice(chef_message_list)
-                state = STATE_CLIENT_RUNNING
+                state = STATE_CLIENT_SEND_COLOUR
             
         elif ( state == STATE_CLIENT_EXITING ):
             break;
