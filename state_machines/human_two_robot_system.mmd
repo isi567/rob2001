@@ -1,0 +1,80 @@
+stateDiagram-v2
+    direction LR
+
+    %% Top-level start
+    [*] --> HumanIdle
+
+    state "Human" as Human {
+        [*] --> Idle
+        state "Idle (waiting for input)" as Idle
+        state "Request Order" as ReqOrder
+        state "Request Bill" as ReqBill
+        state "Request Sauce" as ReqSauce
+
+        Idle --> ReqOrder: "order" (voice/button)
+        Idle --> ReqBill: "bill"
+        Idle --> ReqSauce: "sauce"
+        ReqOrder --> Idle: cancel
+    }
+
+    state "Waiter Robot" as Waiter {
+        [*] --> W_Idle
+        state "Idle" as W_Idle
+        state "Phase 1: Waiting for input" as W_WaitingForInput
+        state "Phase 2: Active mission" as W_ActiveMission
+
+        W_WaitingForInput --> W_ActiveMission: MSG_COLOUR green / bill / sauce
+
+        state W_ActiveMission {
+            [*] --> W_LookingForGreen
+            state "10: Looking for green" as W_LookingForGreen
+            state "11: Found green" as W_FoundGreen
+            state "12: Looking for red" as W_LookingForRed
+            state "13: Return to red" as W_ReturnToRed
+            state "15: Looking for blue" as W_LookingForBlue
+            state "16: Return to blue" as W_ReturnToBlue
+            state "14: Waiting" as W_Waiting
+
+            W_LookingForGreen --> W_FoundGreen: green centered and distance < 15
+            W_FoundGreen --> W_LookingForRed: immediate
+            W_LookingForRed --> W_ReturnToRed: red detected steady
+            W_ReturnToRed --> W_Waiting: at red location for 3 s
+            W_ReturnToRed --> W_LookingForBlue: if request was bill or sauce
+            W_Waiting --> W_Waiting: tbot.stop
+
+            W_LookingForGreen --> W_LookingForGreen: green off-center or not found
+            W_LookingForRed --> W_LookingForRed: red off-center or not found
+            W_ReturnToRed --> W_ReturnToRed: keep moving toward red
+            W_LookingForBlue --> W_ReturnToBlue: blue detected steady
+            W_ReturnToBlue --> W_Waiting: at blue location for 3 s
+
+            W_LookingForBlue --> W_LookingForBlue: blue off-center or not found
+            W_ReturnToBlue --> W_ReturnToBlue: keep moving toward blue
+        }
+    }
+
+    state "Chef Robot" as Chef {
+        [*] --> C_Idle
+        state "Idle" as C_Idle
+        state "Preparing" as C_Prepare
+        state "Ready for pickup" as C_Ready
+        state "Awaiting confirmation" as C_Ack
+        state "Error / Recover" as C_Error
+
+        C_Idle --> C_Prepare: receive MESSAGE found/order from server
+        C_Prepare --> C_Ready: food prepared / send MESSAGE food made
+        C_Ready --> C_Ack: notify waiter / send MESSAGE
+        C_Ack --> C_Idle: receive MESSAGE_RECEIVED
+        C_Prepare --> C_Error: ingredient missing
+        C_Error --> C_Idle: recovered
+    }
+
+    %% Message flows (high-level)
+    Human --> Waiter: human input (order / bill / sauce)
+    Waiter --> Server: send MESSAGE e.g. found/food
+    Server --> Chef: forward MESSAGE order/found
+    Chef --> Server: send MESSAGE food made
+    Server --> Waiter: forward MESSAGE food made (triggers W_Ack)
+
+    %% End
+    

@@ -1,42 +1,56 @@
 stateDiagram-v2
-    [*] --> WaiterIdle
+    direction LR
+
+    [*] --> Server
+
+    state "Server" as Server {
+        [*] --> ServerReady
+        state "Waiting for client connections" as ServerReady
+        state "Accept connection and spawn client thread" as ServerAccept
+        state "Forward MESSAGE / MESSAGE_RECEIVED" as ServerForward
+
+        ServerReady --> ServerAccept: accept()
+        ServerAccept --> ServerReady: client thread running
+        ServerReady --> ServerForward: client thread recv line
+        ServerForward --> ServerReady: send ACK / forward payload
+    }
 
     state "Waiter client" as WaiterClient {
         [*] --> WaiterIdle
-        state "Waiting for input" as WaiterIdle
-        state "Mission 10: Looking for green" as Waiter10
-        state "Mission 11: Found green" as Waiter11
-        state "Mission 12: Looking for red" as Waiter12
-        state "Mission 13: Return to red" as Waiter13
-        state "Mission 14: Waiting" as Waiter14
+        state "Idle / waiting for chef prompt" as WaiterIdle
+        state "Search green" as WaiterSearchGreen
+        state "Align to green" as WaiterAlignGreen
+        state "Search red" as WaiterSearchRed
+        state "Approach red" as WaiterApproachRed
+        state "Mission complete" as WaiterDone
 
-        WaiterIdle --> Waiter10: incoming green / bill / sauce
-        Waiter10 --> Waiter11: green centered and close
-        Waiter11 --> Waiter12: immediate
-        Waiter12 --> Waiter13: red stable
-        Waiter13 --> Waiter14: at red location for 3 s
-        Waiter14 --> Waiter14: stop
+        WaiterIdle --> WaiterSearchGreen: receive asking for green
+        WaiterSearchGreen --> WaiterAlignGreen: green detected
+        WaiterAlignGreen --> WaiterSearchRed: close to green
+        WaiterSearchRed --> WaiterApproachRed: green finished / mission step 12
+        WaiterApproachRed --> WaiterDone: red reached for 3 s
+        WaiterDone --> WaiterDone: stop motors
 
-        Waiter10 --> Waiter10: adjust toward green
-        Waiter12 --> Waiter12: adjust toward red
-        Waiter13 --> Waiter13: keep moving toward red
+        WaiterSearchGreen --> WaiterSearchGreen: turn toward green
+        WaiterAlignGreen --> WaiterAlignGreen: drive forward
+        WaiterSearchRed --> WaiterSearchRed: turn toward red
+        WaiterApproachRed --> WaiterApproachRed: drive toward red
     }
 
     state "Chef client" as ChefClient {
-        [*] --> ChefRunning
-        state "Running / receiving" as ChefRunning
-        state "Send green reply" as ChefSendGreen
-        state "Send confirmation" as ChefConfirm
+        [*] --> ChefIdle
+        state "Idle / processing incoming messages" as ChefIdle
+        state "Send next instruction" as ChefSendInstruction
+        state "Wait for MESSAGE_RECEIVED" as ChefWaitAck
+        state "Finish order" as ChefFinish
 
-        ChefRunning --> ChefSendGreen: incoming food
-        ChefSendGreen --> ChefConfirm: send MESSAGE green
-        ChefConfirm --> ChefRunning: send MESSAGE_RECEIVED
-
-        ChefRunning --> ChefRunning: incoming bill or other
+        ChefIdle --> ChefSendInstruction: incoming found / request text
+        ChefSendInstruction --> ChefWaitAck: send MESSAGE green/tomato/cucumber
+        ChefWaitAck --> ChefIdle: receive MESSAGE_RECEIVED
     }
 
-    Waiter10 --> ChefRunning: send MESSAGE found
-    WaiterIdle --> ChefRunning: send MESSAGE food or other
-    ChefConfirm --> WaiterIdle: server forwards MESSAGE green
-    ChefRunning --> Waiter10: waiter receives green reply
-    ChefRunning --> WaiterIdle: confirmations
+    Server --> WaiterClient: forward MESSAGE asking for green / green / tomato / cucumber
+    Server --> ChefClient: forward MESSAGE found / other text
+    WaiterClient --> Server: send MESSAGE found
+    ChefClient --> Server: send MESSAGE green or MESSAGE_RECEIVED
+    ChefClient --> WaiterClient: forward instruction or confirmation
