@@ -17,7 +17,7 @@ import sys
 import time
 import threading
 import queue
-
+import random
 
 # define the IP address of the machine on which the server is running--where you want this client to connect.
 # this could be a dotted quad address or 'localhost' (shorthand for the local machine).
@@ -49,7 +49,9 @@ client_id = sys.argv[1]
 target_id = sys.argv[2]
 # initial message_text may be provided on the command line; if not, send green automatically.
 
-initial_message = input(print("Message: "))
+chef_message_list = ['green','tomato','cucumber']
+
+initial_message = random.choices(chef_message_list)
 message_text = ''
 input_queue = queue.Queue()
 
