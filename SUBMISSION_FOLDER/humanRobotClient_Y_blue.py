@@ -211,7 +211,7 @@ def chef_main(client_id, target_id, tbot, sock):
                                 print('[%s] send error: %s' % (client_id, e))
                                 break
                             
-                            # Also send confirmation
+                            # send confirmation
                             reply_conf = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
                             try:
                                 sock.sendall((reply_conf + '\n').encode())
@@ -366,7 +366,6 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                             except Exception:
                                 pass
                             break
-                        # chef no longer sends a colour reply for 'bill'; waiter will handle confirmation
 
                 elif server_msg_text.startswith(received_prefix):
                     payload = server_msg_text[len(received_prefix):]
@@ -374,8 +373,7 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
                         msg_from, msg_to = payload.split(' to ', 1)
                         if msg_to.strip() == client_id:
                             print('[%s] got received confirmation from %s' % (client_id, msg_from))
-                            # If we previously sent a message and get a received-confirmation
-                            # from the target, consider the action complete and allow sending again.
+                            # If received-confirmation, consider the action complete and allow sending another messagr
                             if last_sent_text is not None and msg_from.strip() == target_id:
                                 if last_sent_text == 'bill':
                                     print('[%s] Ok, fetching bill' % client_id)
@@ -620,8 +618,8 @@ def waiter_main(client_id, target_id, tbot, sock, picam2):
 
 def main():
     if len(sys.argv) < 4:
-        print('if you want to be a waiter, type arguments: Waiter Chef --waiter')
-        print('if you want to be a chef, type arguments: Chef Waiter --chef')
+        print('if you want to be a waiter, type arguments: waiter chef --waiter')
+        print('if you want to be a chef, type arguments: chef waiter --chef')
         sys.exit(1)
 
     client_id = sys.argv[1]

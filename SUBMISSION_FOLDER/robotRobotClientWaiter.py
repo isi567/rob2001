@@ -1,10 +1,4 @@
-#!/usr/bin/env python3
-"""
-Combined client: merges vision + Trilobot control from trilo_vision_mimi_2.py
-with messaging/interactive behaviour from robocolorClient2.py.
-
-Usage: python combinedclient2.py <ID> <TARGET_ID>
-"""
+# Waiter client for robot-robot system
 
 import time
 import sys
@@ -25,7 +19,7 @@ MSG_RECEIVED = 'MESSAGE_RECEIVED'
 HOST = '10.247.26.135'
 PORT = 50007
 
-# movement gating: robot will not actuate motors unless this is True
+# is the robot moving?
 move_enabled = False
 
 # motion parameters
@@ -48,7 +42,7 @@ colour_ranges = {
     }
 }
 
-# define motion functions (guarded by move_enabled)
+# define motion functions
 def go_forward(tbot):
     if not move_enabled:
         print('movement disabled; waiting for green')
@@ -103,7 +97,7 @@ def sharp_left(tbot):
     time.sleep(TURN_TIME)
     tbot.stop()
 
-# underlighting helpers
+# underlighting definitions
 def red_lights(tbot):
     tbot.fill_underlighting((255,0,0))
 
@@ -166,7 +160,7 @@ def stdin_reader(q):
 def main():
     global move_enabled
     if len(sys.argv) < 3:
-        print('usage: python combinedclient2.py <ID> <TARGET_ID>')
+        print('usage: python robotRobotClientWaiter.py waiter chef')
         sys.exit(1)
 
     client_id = sys.argv[1]
@@ -197,7 +191,7 @@ def main():
         recv_buffer = ''
         has_sent_colour = False
         has_received_confirmation = False
-        has_sent_found = False  # Track "found" detection - only sent once per interaction
+        has_sent_found = False
         has_notified_waiting = False
         last_reported_state = None
 
@@ -230,7 +224,7 @@ def main():
 
             now = time.time()
             
-            # send "found" to target when green is detected (only once per interaction)
+            # send "found" to target when green is detected
             if detected_colour == 'green' and target_id and not has_sent_found:
                 out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': found'
                 try:
@@ -242,9 +236,7 @@ def main():
                     print('[%s] send error: %s' % (client_id, e))
                     break
 
-            #################################################################
-            # Control logic based on mission state machine
-            #################################################################
+            #set mission states
             if mission_state != last_reported_state:
                 if mission_state == 10:
                     send_status(cs, client_id, target_id, 'looking for green')
@@ -325,7 +317,7 @@ def main():
                     print('[%s] Mission complete - at red location' % client_id)
                     mission_state = 14
                     red_found_time = 0.0
-                    move_enabled = False  # Stop moving when mission complete
+                    move_enabled = False
 
             elif mission_state == 14:  # WAITING
                 tbot.stop()
@@ -335,7 +327,7 @@ def main():
                     print('[%s] sent: waiting' % client_id)
                     has_notified_waiting = True
 
-            # check for interactive input to send arbitrary messages
+            # check for pending messages
             pending_message = None
             try:
                 pending_message = input_queue.get_nowait()
@@ -383,11 +375,12 @@ def main():
                         if msg_to == client_id:
                             print('[%s] received from %s: %s' % (client_id, msg_from, msg_colour))
                             apply_colour_lights(tbot, msg_colour)
-                            # enable movement only when we receive 'green'
+                            # when chef's orders come throughm, allow movement
                             if msg_colour == 'green' or 'tomato' or 'cucumber':
                                 move_enabled = True
                                 cs.sendall('movement enabled\n'.encode())
-                                mission_state = 10  # reset to LOOKING_FOR_GREEN to restart the sequence
+                                mission_state = 10  
+                                # reset to LOOKING_FOR_GREEN to restart the sequence
                                 green_found_time = 0.0
                                 red_found_time = 0.0
                                 has_notified_waiting = False

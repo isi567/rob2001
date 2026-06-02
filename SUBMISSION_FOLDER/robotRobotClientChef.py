@@ -1,15 +1,9 @@
-#--
-# roboclient1.py
+# Chef client in robot-robot system
 #
 # Example multi-robot system client programme
 # from: https://docs.python.org/3/library/socket.html
 # with comments and debugging prints by esklar/11-feb-2025
 # based on esklar/echoclient4.py (mar-2026)
-#
-# $ python roboclient1.py < ID >
-# where ID is the client ID, a string that identifies the client to the server
-#
-#--
 
 # import python socket-handling library.
 import socket
@@ -20,8 +14,7 @@ import queue
 import random
 
 # define the IP address of the machine on which the server is running--where you want this client to connect.
-# this could be a dotted quad address or 'localhost' (shorthand for the local machine).
-#HOST = 'localhost'   # or, e.g. '10.5.24.62'
+#HOST = 'localhost' 
 HOST = '10.247.26.135'
 # define the port for connecting to server.
 # the value needs to match what the server used when it was initialised.
@@ -42,7 +35,7 @@ STATE_CLIENT_RECEIVE_COLOUR = 5
 
 # client ID and target ID are command line arguments
 if ( len( sys.argv ) < 3 ):
-    print( 'usage: python robocolorClient.py <ID> <TARGET_ID> [MESSAGE ...]' )
+    print( 'usage: python robotRobotClientChef.py chef waiter' )
     sys.exit( 1 )
 
 client_id = sys.argv[1]
@@ -64,7 +57,7 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
     #state = STATE_CLIENT_RUNNING
     client_msg = MSG_REGISTER + ' ' + client_id
     print( '[client %s] sending message: %s' % ( client_id, client_msg ))
-    cs.sendall( (client_msg + '\n').encode() ) # send formatted message to server
+    cs.sendall( (client_msg + '\n').encode() )
     print( '[client %s] sent message: %s' % ( client_id, client_msg ))
     state = STATE_CLIENT_RUNNING
     while( True ):
@@ -75,7 +68,8 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
                 state = STATE_CLIENT_RECEIVE_COLOUR
 
 
-        elif ( state == STATE_CLIENT_SEND_COLOUR ): # send pending message to target
+        elif ( state == STATE_CLIENT_SEND_COLOUR ):
+            # send pending message to target
             client_msg = MSG_SENT + ' from ' + client_id + ' to ' + target_id + ': ' + message_text
             cs.sendall( (client_msg + '\n').encode() ) # send formatted message to server
             print( '[client %s] sent message: %s' % ( client_id, client_msg ))
@@ -123,7 +117,7 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
                 if ( received_payload.endswith( 'waiting' ) ):
                     print( '[client %s] interaction complete: waiter is waiting again after red. Ready for next message' % ( client_id ))
 
-                    # choose the next random action immediately and send it on the next loop iteration
+                    # choose the next random message from chef and loop
                     has_received_confirmation = True
                     has_sent_colour = False
                     has_received_confirmation = False

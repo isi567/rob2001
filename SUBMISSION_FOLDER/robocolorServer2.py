@@ -1,25 +1,17 @@
-#--
-# roboserver1.py
+# Server for human-robot and robot-robot systems
 #
 # Example multi-robot system server programme
 # from: https://docs.python.org/3/library/socket.html
 # with comments and debugging prints by esklar/11-feb-2025
 # based on esklar/echoserver4.py (mar-2026)
 #
-# $ python roboserver1.py
-#
-#--
-
-# change on mimi branch
-# change on yasmin branch
 
 # import python socket-handling library.
 import socket
 import threading
 
 # define the IP address of the machine on which the server is running.
-# this could be a dotted quad address or 'localhost' (shorthand for the local machine).
-#HOST = 'localhost'   # or, e.g. '10.5.24.62'
+#HOST = 'localhost'
 HOST = '10.247.26.135'
 
 # define the port for clients to connect to this socket.
@@ -47,10 +39,7 @@ STATE_CLIENT_SEND_SENT    = 5
 ClientList = []
 ClientListLock = threading.Lock()
 
-#--
 # define thread for handling communication with a single client.
-# more than one of these can be instantiated...
-#--
 class client_thread( threading.Thread ):
     # this function is called when a new thread object is instantiated
     def __init__( self, name, connection ):
