@@ -51,38 +51,62 @@ def send_to_chef(msg, from_id=None, to_id=None):
 
 
 def handle_chef_message(tbot, message_text):
-    """React to chef status and ingredient messages differently."""
+    """React to chef status and ingredient messages differently.
+
+    Returns an actions dict which may contain keys:
+    - 'mission_state': int to set mission_state
+    - 'move_enabled': bool to set move_enabled
+    - 'stop': True to call tbot.stop()
+    """
+    actions = {}
     normalized = message_text.strip().lower()
 
     if normalized.startswith('asking for '):
         ingredient = normalized[len('asking for '):].strip()
         send_to_chef('chef status: asking for %s' % ingredient)
-        return
+        # switch mission state to search for the requested ingredient
+        if ingredient == 'tomato':
+            actions['mission_state'] = 12  # LOOKING_FOR_RED
+            actions['move_enabled'] = True
+        elif ingredient == 'cucumber' or ingredient == 'green':
+            actions['mission_state'] = 10  # LOOKING_FOR_GREEN
+            actions['move_enabled'] = True
+        return actions
 
     if normalized == 'green':
         send_to_chef('chef ingredient: green')
         apply_colour_lights(tbot, 'green')
-        return
+        actions['move_enabled'] = True
+        actions['mission_state'] = 10
+        return actions
 
     if normalized == 'tomato':
         send_to_chef('chef ingredient: tomato')
         apply_colour_lights(tbot, 'red')
-        return
+        # when ingredient received, stop moving
+        actions['move_enabled'] = False
+        actions['stop'] = True
+        return actions
 
     if normalized == 'cucumber':
         send_to_chef('chef ingredient: cucumber')
         apply_colour_lights(tbot, 'green')
-        return
+        actions['move_enabled'] = False
+        actions['stop'] = True
+        return actions
 
     if normalized == 'saying food made':
         send_to_chef('chef status: food made')
-        return
+        return actions
 
     if normalized == 'food made':
         send_to_chef('chef action: food made')
-        return
+        actions['move_enabled'] = False
+        actions['stop'] = True
+        return actions
 
     send_to_chef('chef message: %s' % normalized)
+    return actions
 
 # movement gating: robot will not actuate motors unless this is True
 move_enabled = False
@@ -422,17 +446,21 @@ def main():
                         msg_to = msg_to_text.strip()
                         msg_colour = msg_colour.strip().lower()
                         if msg_to == client_id:
-                            print('received from %s: %s' % (msg_from, msg_colour))
-                            handle_chef_message(tbot, msg_colour)
-                            # enable movement only when we receive 'green'
-                            if msg_colour == 'green':
-                                move_enabled = True
-                                mission_state = 10  # reset to LOOKING_FOR_GREEN to restart the sequence
-                                green_found_time = 0.0
-                                red_found_time = 0.0
-                                send_to_chef('*** MOVEMENT ENABLED - mission restart ***')
-                            else:
-                                move_enabled = False
+                            send_to_chef('received from %s: %s' % (msg_from, msg_colour))
+                            actions = handle_chef_message(tbot, msg_colour)
+                            if actions is None:
+                                actions = {}
+                            if 'mission_state' in actions:
+                                mission_state = actions['mission_state']
+                            if 'move_enabled' in actions:
+                                move_enabled = actions['move_enabled']
+                                if move_enabled:
+                                    send_to_chef('*** MOVEMENT ENABLED - mission restart ***')
+                            if actions.get('stop'):
+                                try:
+                                    tbot.stop()
+                                except Exception:
+                                    pass
                             # send confirmation back to sender
                             reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
                             cs.sendall((reply_msg + '\n').encode())
