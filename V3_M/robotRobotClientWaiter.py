@@ -25,74 +25,6 @@ MSG_RECEIVED = 'MESSAGE_RECEIVED'
 HOST = '10.247.26.135'
 PORT = 50007
 
-# globals for forwarding messages to the chef via server
-cs_global = None
-client_id_global = None
-chef_id_global = None
-
-
-def send_to_chef(msg, from_id=None, to_id=None):
-    """Send a MESSAGE to the chef via the server. Falls back to local print().
-
-    If `from_id` or `to_id` are provided they override the globals (useful
-    before the socket is connected).
-    """
-    global cs_global, client_id_global, chef_id_global
-    out_from = from_id if from_id is not None else (client_id_global or 'unknown')
-    out_to = to_id if to_id is not None else (chef_id_global or 'chef')
-    out_msg = MSG_COLOUR + ' from ' + str(out_from) + ' to ' + str(out_to) + ': ' + str(msg)
-    if cs_global is not None:
-        try:
-            cs_global.sendall((out_msg + '\n').encode())
-            return
-        except Exception:
-            pass
-    print(out_msg)
-
-
-def handle_chef_message(tbot, message_text):
-    """React to chef status and ingredient messages differently.
-
-    Returns an actions dict which may contain keys:
-    - 'mission_state': int to set mission_state
-    - 'move_enabled': bool to set move_enabled
-    - 'reset_cycle': True to clear per-mission timers and flags
-    - 'stop': True to call tbot.stop()
-    """
-    actions = {}
-    normalized = message_text.strip().lower()
-
-    if normalized.startswith('asking for '):
-        ingredient = normalized[len('asking for '):].strip()
-        send_to_chef('chef status: asking for %s' % ingredient)
-        # start the full mission sequence: first LOOKING_FOR_GREEN, then LOOKING_FOR_RED
-        actions['mission_state'] = 10
-        actions['move_enabled'] = True
-        actions['reset_cycle'] = True
-        return actions
-
-    # Any of these ingredient/instruction messages should start the mission
-    if normalized in ('green', 'tomato', 'cucumber'):
-        send_to_chef('chef instruction: %s' % normalized)
-        # start mission: look for green first, then proceed to red
-        actions['mission_state'] = 10
-        actions['move_enabled'] = True
-        actions['reset_cycle'] = True
-        return actions
-
-    if normalized == 'saying food made':
-        send_to_chef('chef status: food made')
-        return actions
-
-    if normalized == 'food made':
-        send_to_chef('chef action: food made')
-        actions['move_enabled'] = False
-        actions['stop'] = True
-        return actions
-
-    send_to_chef('chef message: %s' % normalized)
-    return actions
-
 # movement gating: robot will not actuate motors unless this is True
 move_enabled = False
 
@@ -119,54 +51,54 @@ colour_ranges = {
 # define motion functions (guarded by move_enabled)
 def go_forward(tbot):
     if not move_enabled:
-        send_to_chef('movement disabled; waiting for green')
+        print('movement disabled; waiting for green')
         return
-    #send_to_chef('moving forward')
+    print('moving forward')
     tbot.forward(DRIVE_SPEED)
     time.sleep(DRIVE_TIME)
     tbot.stop()
 
 def go_backward(tbot):
     if not move_enabled:
-        send_to_chef('movement disabled; waiting for green')
+        print('movement disabled; waiting for green')
         return
-    #send_to_chef('moving backward')
+    print('moving backward')
     tbot.backward(DRIVE_SPEED)
     time.sleep(DRIVE_TIME)
     tbot.stop()
 
 def turn_left(tbot):
     if not move_enabled:
-        send_to_chef('movement disabled; waiting for green')
+        print('movement disabled; waiting for green')
         return
-    #send_to_chef('turning left')
+    print('turning left')
     tbot.curve_forward_left(TURN_SPEED)
     time.sleep(TURN_TIME)
     tbot.stop()
 
 def turn_right(tbot):
     if not move_enabled:
-        send_to_chef('movement disabled; waiting for green')
+        print('movement disabled; waiting for green')
         return
-    #send_to_chef('turning right')
+    print('turning right')
     tbot.curve_forward_right(TURN_SPEED)
     time.sleep(TURN_TIME)
     tbot.stop()
 
 def sharp_right(tbot):
     if not move_enabled:
-        send_to_chef('movement disabled; waiting for green')
+        print('movement disabled; waiting for green')
         return
-    #send_to_chef('sharp right')
+    print('sharp right')
     tbot.turn_right(TURN_SPEED)
     time.sleep(TURN_TIME)
     tbot.stop()
 
 def sharp_left(tbot):
     if not move_enabled:
-        send_to_chef('movement disabled; waiting for green')
+        print('movement disabled; waiting for green')
         return
-    #send_to_chef('sharp left')
+    print('sharp left')
     tbot.turn_left(TURN_SPEED)
     time.sleep(TURN_TIME)
     tbot.stop()
@@ -229,13 +161,13 @@ def stdin_reader(q):
 def main():
     global move_enabled
     if len(sys.argv) < 3:
-        print('usage: python combinedclient2.py <ID> <TARGET_ID>', from_id='unknown', to_id='chef')
+        print('usage: python combinedclient2.py <ID> <TARGET_ID>')
         sys.exit(1)
 
     client_id = sys.argv[1]
     target_id = sys.argv[2]
 
-    #print('[%s] Starting (target: %s)' % (client_id, target_id), from_id=client_id, to_id=target_id)
+    print('[%s] Starting (target: %s)' % (client_id, target_id))
     tbot = Trilobot()
 
     picam2 = Picamera2()
@@ -251,12 +183,7 @@ def main():
         cs.connect((HOST, PORT))
         cs.settimeout(0.5)
         cs.sendall((MSG_REGISTER + ' ' + client_id + '\n').encode())
-        # set globals used by send_to_chef so subsequent calls forward to chef
-        global cs_global, client_id_global, chef_id_global
-        cs_global = cs
-        client_id_global = client_id
-        chef_id_global = target_id
-        send_to_chef('[%s] Connected to server' % client_id)
+        print('[%s] Connected to server' % client_id)
 
         state = 2
         last_sent_colour = None
@@ -301,18 +228,17 @@ def main():
                 out_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': found'
                 try:
                     cs.sendall((out_msg + '\n').encode())
-                    send_to_chef('sent: found')
+                    print('[%s] sent: found' % client_id)
                     has_sent_found = True
                     last_send_time = now
                 except Exception as e:
-                    send_to_chef('send error: %s' % (e,))
+                    print('[%s] send error: %s' % (client_id, e))
                     break
 
             #################################################################
             # Control logic based on mission state machine
             #################################################################
             if mission_state == 10:  # LOOKING_FOR_GREEN
-                send_to_chef('Looking for green')
                 if centers.get('green') is not None:
                     green_x = centers.get('green')[0]
                     distance = get_distance(tbot)
@@ -333,7 +259,6 @@ def main():
                 mission_state = 12
 
             elif mission_state == 12:  # LOOKING_FOR_RED
-                send_to_chef('Looking for red')
                 if centers.get('red') is not None:
                     red_x = centers.get('red')[0]
                     now_check = time.time()
@@ -357,7 +282,6 @@ def main():
                     sharp_right(tbot)
 
             elif mission_state == 13:  # RETURN_TO_RED
-                send_to_chef('Going to red')
                 if centers.get('red') is not None:
                     red_x = centers.get('red')[0]
                     if red_x < 280:
@@ -376,13 +300,12 @@ def main():
                 if red_found_time == 0.0:
                     red_found_time = now_check
                 if now_check - red_found_time >= 3.0:
-                    send_to_chef('Mission complete - at red location')
+                    print('[%s] Mission complete - at red location' % client_id)
                     mission_state = 14
                     red_found_time = 0.0
                     move_enabled = False  # Stop moving when mission complete
 
             elif mission_state == 14:  # WAITING
-                #send_to_chef('Stopping')
                 tbot.stop()
 
             # check for interactive input to send arbitrary messages
@@ -395,7 +318,7 @@ def main():
             if pending_message is not None and not has_sent_colour:
                 client_msg = MSG_COLOUR + ' from ' + client_id + ' to ' + target_id + ': ' + pending_message
                 cs.sendall((client_msg + '\n').encode())
-                send_to_chef('sent: %s' % (pending_message,))
+                print('[%s] sent: %s' % (client_id, pending_message))
                 has_sent_colour = True
                 has_received_confirmation = False
 
@@ -409,7 +332,7 @@ def main():
                 break
 
             if not chunk:
-                send_to_chef('Server disconnected')
+                print('[%s] Server disconnected' % client_id)
                 break
 
             recv_buffer += chunk.decode()
@@ -420,8 +343,6 @@ def main():
                 server_msg_text = line.strip()
                 if not server_msg_text:
                     continue
-                # debug log raw forwarded server line
-                print('RAW_SERVER: %s' % line)
                 colour_prefix = 'Forwarding ' + MSG_COLOUR + ' from '
                 received_prefix = 'Forwarding ' + MSG_RECEIVED + ' from '
 
@@ -433,25 +354,17 @@ def main():
                         msg_to = msg_to_text.strip()
                         msg_colour = msg_colour.strip().lower()
                         if msg_to == client_id:
-                            send_to_chef('received from %s: %s' % (msg_from, msg_colour))
-                            actions = handle_chef_message(tbot, msg_colour)
-                            if actions is None:
-                                actions = {}
-                            if 'mission_state' in actions:
-                                mission_state = actions['mission_state']
-                            if 'move_enabled' in actions:
-                                move_enabled = actions['move_enabled']
-                                if move_enabled:
-                                    send_to_chef('*** MOVEMENT ENABLED - mission restart ***')
-                            if actions.get('reset_cycle'):
+                            print('[%s] received from %s: %s' % (client_id, msg_from, msg_colour))
+                            apply_colour_lights(tbot, msg_colour)
+                            # enable movement only when we receive 'green'
+                            if msg_colour == 'green' or 'tomato' or 'cucumber':
+                                move_enabled = True
+                                mission_state = 10  # reset to LOOKING_FOR_GREEN to restart the sequence
                                 green_found_time = 0.0
                                 red_found_time = 0.0
-                                has_sent_found = False
-                            if actions.get('stop'):
-                                try:
-                                    tbot.stop()
-                                except Exception:
-                                    pass
+                                print('[%s] *** MOVEMENT ENABLED - mission restart ***' % client_id)
+                            else:
+                                move_enabled = False
                             # send confirmation back to sender
                             reply_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + msg_from
                             cs.sendall((reply_msg + '\n').encode())
@@ -460,14 +373,14 @@ def main():
                     if ' to ' in payload:
                         msg_from, msg_to = payload.split(' to ', 1)
                         if msg_to.strip() == client_id:
-                            send_to_chef('got received confirmation from %s' % (msg_from,))
+                            print('[combined %s] got received confirmation from %s' % (client_id, msg_from))
                             has_received_confirmation = True
                             has_sent_colour = False
 
     except KeyboardInterrupt:
-        send_to_chef('Interrupted by user', from_id=client_id)
+        print('[%s] Interrupted by user' % client_id)
     except Exception as e:
-        send_to_chef('Fatal error: %s' % (e,), from_id=client_id)
+        print('[%s] Fatal error: %s' % (client_id, e))
     finally:
         safe_cleanup(tbot, cs, picam2)
 
