@@ -161,6 +161,7 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
                 message_text = ''
                 has_sent_colour = False
                 has_received_confirmation = False
+                state = STATE_CLIENT_RUNNING
             
         elif ( state == STATE_CLIENT_EXITING ):
             break;
