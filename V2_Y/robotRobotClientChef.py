@@ -51,7 +51,7 @@ target_id = sys.argv[2]
 
 chef_message_list = ['green','tomato','cucumber']
 
-initial_message = random.choices(chef_message_list)
+initial_message = str(random.choices(chef_message_list))
 message_text = ''
 input_queue = queue.Queue()
 
