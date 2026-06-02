@@ -64,35 +64,17 @@ def handle_chef_message(tbot, message_text):
     if normalized.startswith('asking for '):
         ingredient = normalized[len('asking for '):].strip()
         send_to_chef('chef status: asking for %s' % ingredient)
-        # switch mission state to search for the requested ingredient
-        if ingredient == 'tomato':
-            actions['mission_state'] = 12  # LOOKING_FOR_RED
-            actions['move_enabled'] = True
-        elif ingredient == 'cucumber' or ingredient == 'green':
-            actions['mission_state'] = 10  # LOOKING_FOR_GREEN
-            actions['move_enabled'] = True
-        return actions
-
-    if normalized == 'green':
-        send_to_chef('chef ingredient: green')
-        apply_colour_lights(tbot, 'green')
-        actions['move_enabled'] = True
+        # start the full mission sequence: first LOOKING_FOR_GREEN, then LOOKING_FOR_RED
         actions['mission_state'] = 10
+        actions['move_enabled'] = True
         return actions
 
-    if normalized == 'tomato':
-        send_to_chef('chef ingredient: tomato')
-        apply_colour_lights(tbot, 'red')
-        # when ingredient received, stop moving
-        actions['move_enabled'] = False
-        actions['stop'] = True
-        return actions
-
-    if normalized == 'cucumber':
-        send_to_chef('chef ingredient: cucumber')
-        apply_colour_lights(tbot, 'green')
-        actions['move_enabled'] = False
-        actions['stop'] = True
+    # Any of these ingredient/instruction messages should start the mission
+    if normalized in ('green', 'tomato', 'cucumber'):
+        send_to_chef('chef instruction: %s' % normalized)
+        # start mission: look for green first, then proceed to red
+        actions['mission_state'] = 10
+        actions['move_enabled'] = True
         return actions
 
     if normalized == 'saying food made':
