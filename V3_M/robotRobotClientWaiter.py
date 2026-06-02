@@ -240,6 +240,7 @@ def main():
             # Control logic based on mission state machine
             #################################################################
             if mission_state == 10:  # LOOKING_FOR_GREEN
+                print('[%s] looking for green...' % client_id)
                 if centers.get('green') is not None:
                     green_x = centers.get('green')[0]
                     distance = get_distance(tbot)
@@ -257,9 +258,11 @@ def main():
                     sharp_right(tbot)
 
             elif mission_state == 11:  # FOUND_GREEN
+                print('[%s] found green!' % client_id)
                 mission_state = 12
 
             elif mission_state == 12:  # LOOKING_FOR_RED
+                print('[%s] looking for red...' % client_id)
                 if centers.get('red') is not None:
                     red_x = centers.get('red')[0]
                     now_check = time.time()
@@ -283,6 +286,7 @@ def main():
                     sharp_right(tbot)
 
             elif mission_state == 13:  # RETURN_TO_RED
+                print('[%s] returning to red...' % client_id)
                 if centers.get('red') is not None:
                     red_x = centers.get('red')[0]
                     if red_x < 280:
