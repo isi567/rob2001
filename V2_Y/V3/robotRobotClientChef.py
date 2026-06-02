@@ -161,8 +161,11 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
                 message_text = ''
                 has_sent_colour = False
                 has_received_confirmation = False
+                
+                # send another random message from the chef list
+                next_message = str(random.choice(chef_message_list))
+                input_queue.put(next_message)
                 state = STATE_CLIENT_RUNNING
-                continue
             
         elif ( state == STATE_CLIENT_EXITING ):
             break;
