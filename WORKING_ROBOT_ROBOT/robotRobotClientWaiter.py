@@ -124,11 +124,6 @@ def apply_colour_lights(tbot, colour):
 def get_distance(tbot):
     return tbot.read_distance()
 
-def send_status(cs, client_id, target_id, status_text):
-    status_msg = MSG_RECEIVED + ' from ' + client_id + ' to ' + target_id + ': ' + status_text
-    cs.sendall((status_msg + '\n').encode())
-    print('[%s] sent: %s' % (client_id, status_text))
-
 def safe_cleanup(tbot=None, sock=None, camera=None):
     try:
         if tbot is not None:
@@ -199,7 +194,6 @@ def main():
         has_received_confirmation = False
         has_sent_found = False  # Track "found" detection - only sent once per interaction
         has_notified_waiting = False
-        last_reported_state = None
 
         mission_state = 10  # STATE_MISSION_LOOKING_FOR_GREEN
         green_found_time = 0.0
@@ -245,17 +239,6 @@ def main():
             #################################################################
             # Control logic based on mission state machine
             #################################################################
-            if mission_state != last_reported_state:
-                if mission_state == 10:
-                    send_status(cs, client_id, target_id, 'looking for green')
-                elif mission_state == 11:
-                    send_status(cs, client_id, target_id, 'found green')
-                elif mission_state == 12:
-                    send_status(cs, client_id, target_id, 'looking for red')
-                elif mission_state == 13:
-                    send_status(cs, client_id, target_id, 'found red')
-                last_reported_state = mission_state
-
             if mission_state == 10:  # LOOKING_FOR_GREEN
                 print('[%s] looking for green...' % client_id)
                 if centers.get('green') is not None:
@@ -390,7 +373,6 @@ def main():
                                 green_found_time = 0.0
                                 red_found_time = 0.0
                                 has_notified_waiting = False
-                                last_reported_state = None
                                 print('[%s] *** MOVEMENT ENABLED - mission restart ***' % client_id)
                             else:
                                 move_enabled = False

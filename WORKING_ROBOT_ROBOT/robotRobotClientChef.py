@@ -118,8 +118,6 @@ with socket.socket( socket.AF_INET, socket.SOCK_STREAM ) as cs:
                 sender_id = msg_tokens[3]
                 received_payload = ' '.join( msg_tokens[4:] )
 
-                print( '[client %s] status update from %s: %s' % ( client_id, sender_id, received_payload ))
-
                 if ( received_payload.endswith( 'waiting' ) ):
                     print( '[client %s] interaction complete: waiter is waiting again after red. Ready for next message' % ( client_id ))
 
